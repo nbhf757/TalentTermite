@@ -1,9 +1,10 @@
 import type { Totals } from '../lib/footprint';
 import type { PriceBook } from '../lib/priceBook';
-import { defaultQty, lineTotal, recurringSummary } from '../lib/pricing';
+import { defaultQty, recurringSummary } from '../lib/pricing';
 import type { Suggestion } from '../lib/suggestions';
 import { COMPANY, FINANCING, INTRO, NOTICES, TERMS_DRAFT, WARRANTY } from '../lib/terms';
 import SignaturePad from '../components/SignaturePad';
+import { buildPackages, defaultPackaging } from '../lib/packages';
 import { BRANDS, customerReady, type Brand, type Customer } from './CustomerScreen';
 import { workIsSellable, type Work } from './WorkScreen';
 
@@ -16,7 +17,6 @@ const METHODS: [PaymentMethod, string][] = [
   ['finance_sac', FINANCING.sameAsCash], ['finance_5yr', FINANCING.fiveYear],
 ];
 const INTERVAL: Record<string, string> = { month: 'per month', quarter: 'per quarter', year: 'per year', service: 'per service' };
-const SECTION_TITLES: Record<string, string> = { foundation: 'Foundation', moisture: 'Moisture', pest: 'Pest', attic: 'Pest', recurring: 'Ongoing services' };
 const $ = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
 export default function ProposalScreen({ brand, customer, book, totals, work, suggestions, comments, signoff, onSignoff }: {
@@ -27,12 +27,13 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
   const lines = work.lines.flatMap(l => {
     const item = byId.get(l.itemId); if (!item) return [];
     const qty = l.qty ?? defaultQty(item, totals);
-    return [{ item, qty, total: lineTotal({ item, qty }) }];
+    return [{ key: l.key, item, qty }];
   });
+  const packaging = work.packaging ?? defaultPackaging();
+  const packages = buildPackages(lines, packaging);
   const { quote: q, down, problems } = workIsSellable(work, book, totals);
   const ongoing = recurringSummary(lines.map(l => l.item));
   const hasAprilaire = lines.some(l => /^(Dehumidifier|Full Encapsulation)/.test(l.item.name));
-  const groups = [...new Set(lines.map(l => SECTION_TITLES[l.item.section]))];
 
   const blockers = [...problems];
   if (!customerReady(customer)) blockers.unshift('Finish the customer details.');
@@ -66,24 +67,26 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
       </section>
 
       <section className="card">
-        <h3>Recommended work</h3>
-        {groups.map(g => (
-          <div key={g}>
-            <div className="prop-group">{g}</div>
-            {lines.filter(l => SECTION_TITLES[l.item.section] === g).map(l => (
-              <div key={l.item.id} className="prop-line">
-                <div>
-                  <div>{l.item.name}{l.item.section !== 'recurring' && l.item.unit !== 'lump' && l.item.unit !== 'each' ? ` (${l.qty} ${l.item.unit})` : ''}{l.item.unit === 'each' && l.qty !== 1 ? ` × ${l.qty}` : ''}</div>
-                  {l.item.description && <div className="muted small">{l.item.description}</div>}
-                  {l.item.recurring_price != null && <div className="muted small">Then {$(l.item.recurring_price)} {INTERVAL[l.item.recurring_interval ?? ''] ?? ''}{l.item.recurring_interval === 'month' && /^Talent /.test(l.item.name) ? ', with quarterly service and unlimited call-backs' : ''}</div>}
-                </div>
-                <div>{$(l.total)}</div>
-              </div>
-            ))}
+        <h3>Your recommended plan</h3>
+        {packages.map(p => (
+          <div key={p.key} className="pkg">
+            <div className="pkg-head">
+              <span className="pkg-title">{p.name}</span>
+              {packaging.showPackagePrices && <span className="pkg-price">{$(p.price)}</span>}
+            </div>
+            <div className="muted small">{p.pitch}</div>
+            <ul className="pkg-scope">
+              {p.lines.map((l, i) => (
+                <li key={l.key}>{p.scope[i]}
+                  {l.item.recurring_price != null && <span className="muted"> ({l.item.initial_price != null ? `${$(l.item.initial_price)} to start, then ` : ''}{$(l.item.recurring_price)} {INTERVAL[l.item.recurring_interval ?? ''] ?? ''}{l.item.recurring_interval === 'month' && /^Talent /.test(l.item.name) ? ', quarterly service with unlimited call-backs' : ''})</span>}
+                </li>
+              ))}
+            </ul>
+            {p.warranties.length > 0 && <div className="pkg-warranty small">Includes: {p.warranties.join(' · ')}</div>}
           </div>
         ))}
         <div className="summary">
-          <div className="sum-row"><span>Subtotal</span><span>{$(q.subtotal)}</span></div>
+          {q.discountAmount > 0 && <div className="sum-row"><span>Plan value</span><span>{$(q.subtotal)}</span></div>}
           {q.discountAmount > 0 && <div className="sum-row"><span>Discount ({q.discountPct}%)</span><span>−{$(q.discountAmount)}</span></div>}
           <div className="sum-row total"><span>Total</span><span>{$(q.total)}</span></div>
           {Object.entries(ongoing).map(([k, v]) => <div key={k} className="sum-row muted"><span>Ongoing</span><span>{$(v)} {INTERVAL[k]}</span></div>)}

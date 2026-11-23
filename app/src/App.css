@@ -103,3 +103,14 @@ button.wide { width: 100%; padding: 12px; }
 .center { text-align: center; }
 .top-actions { margin-left: auto; display: flex; gap: 6px; }
 .top-btn { background: transparent; color: #fff; border-color: #555b61; font-size: 14px; padding: 6px 10px; }
+.pkg { border-top: 1px solid var(--line); padding: 10px 0; }
+.pkg-head { display: flex; justify-content: space-between; gap: 12px; }
+.pkg-title { font-weight: 700; color: #3f6d10; font-size: 17px; }
+.pkg-price { font-weight: 700; white-space: nowrap; }
+.pkg-scope { margin: 6px 0; padding-left: 20px; }
+.pkg-scope li { margin: 3px 0; }
+.pkg-warranty { color: #3f6d10; }
+.pkg-edit { border-top: 1px solid var(--line); padding: 8px 0; }
+.pkg-name { width: 100%; box-sizing: border-box; font-weight: 700; }
+.pkg-line { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0 0 8px; font-size: 14px; }
+.pkg-line select { font-size: 13px; padding: 4px 6px; max-width: 50%; }

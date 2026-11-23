@@ -5,10 +5,11 @@ import {
   defaultQty, DISCOUNT_ABSOLUTE_MAX, downPayment, lineTotal, quote, recurringSummary,
 } from '../lib/pricing';
 import type { Suggestion } from '../lib/suggestions';
+import { buildPackages, defaultPackaging, PACKAGE_DEFS, type PackageKey, type Packaging } from '../lib/packages';
 
 export type WorkLine = { key: string; itemId: string; qty: number | null; note?: string }; // qty null = follow the drawing
-export type Work = { lines: WorkLine[]; discountPct: number; approver: string; down: { amount?: number; pct?: number } };
-export const emptyWork = (): Work => ({ lines: [], discountPct: 0, approver: '', down: {} });
+export type Work = { lines: WorkLine[]; discountPct: number; approver: string; down: { amount?: number; pct?: number }; packaging?: Packaging };
+export const emptyWork = (): Work => ({ lines: [], discountPct: 0, approver: '', down: {}, packaging: defaultPackaging() });
 
 const GROUPS: { key: string; title: string; sections: BookItem['section'][] }[] = [
   { key: 'foundation', title: 'Foundation', sections: ['foundation'] },
@@ -104,6 +105,37 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
           </section>
         );
       })}
+
+      {lines.length > 0 && (() => {
+        const pk = work.packaging ?? defaultPackaging();
+        const setPk = (patch: Partial<Packaging>) => set({ packaging: { ...pk, ...patch } });
+        const packages = buildPackages(lines, pk);
+        return (
+          <section className="card">
+            <h3>Packages the customer will see</h3>
+            <p className="muted small">Work is bundled automatically. The proposal shows what each package includes, not a price per item.</p>
+            {packages.map(p => (
+              <div key={p.key} className="pkg-edit">
+                <input className="pkg-name" value={pk.names[p.key] ?? p.name}
+                  onChange={e => setPk({ names: { ...pk.names, [p.key]: e.target.value } })} />
+                {p.lines.map(l => (
+                  <div key={l.key} className="pkg-line">
+                    <span>{l.item.name}</span>
+                    <select value={p.key} onChange={e => setPk({ moves: { ...pk.moves, [l.key]: e.target.value as PackageKey } })}>
+                      {(Object.keys(PACKAGE_DEFS) as PackageKey[]).map(k => <option key={k} value={k}>{PACKAGE_DEFS[k].name.replace(' Package', '')}</option>)}
+                    </select>
+                  </div>
+                ))}
+                {pk.showPackagePrices && <div className="small"><strong>{$(p.price)}</strong></div>}
+              </div>
+            ))}
+            <label className="check small"><input type="checkbox" checked={pk.combineWater} onChange={e => setPk({ combineWater: e.target.checked })} />
+              Combine water management with moisture control</label>
+            <label className="check small"><input type="checkbox" checked={pk.showPackagePrices} onChange={e => setPk({ showPackagePrices: e.target.checked })} />
+              Show a price for each package (otherwise one total)</label>
+          </section>
+        );
+      })()}
 
       <section className="card summary">
         <div className="sum-row"><span>Subtotal</span><span>{$(q.subtotal)}</span></div>
