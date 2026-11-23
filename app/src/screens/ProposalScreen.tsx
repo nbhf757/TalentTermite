@@ -2,7 +2,7 @@ import type { Totals } from '../lib/footprint';
 import type { PriceBook } from '../lib/priceBook';
 import { defaultQty, recurringSummary } from '../lib/pricing';
 import type { Suggestion } from '../lib/suggestions';
-import { COMPANY, FINANCING, INTRO, NOTICES, TERMS_DRAFT, WARRANTY } from '../lib/terms';
+import { COMPANY, DRYING_WOOD_TERM, FINANCING, INTRO, NOTICES, TERMS_DRAFT, WARRANTY } from '../lib/terms';
 import SignaturePad from '../components/SignaturePad';
 import { buildPackages, defaultPackaging } from '../lib/packages';
 import { BRANDS, customerReady, type Brand, type Customer } from './CustomerScreen';
@@ -27,7 +27,7 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
   const lines = work.lines.flatMap(l => {
     const item = byId.get(l.itemId); if (!item) return [];
     const qty = l.qty ?? defaultQty(item, totals);
-    return [{ key: l.key, item, qty }];
+    return [{ key: l.key, item, qty, variant: l.variant }];
   });
   const packaging = work.packaging ?? defaultPackaging();
   const packages = buildPackages(lines, packaging);
@@ -118,7 +118,7 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
 
       <section className="card">
         <h3>Terms <span className="draft-tag">DRAFT wording, needs approval</span></h3>
-        {TERMS_DRAFT.map(t => <p key={t.title} className="small"><strong>{t.title}.</strong> {t.text}</p>)}
+        {[...TERMS_DRAFT, ...(hasAprilaire ? [DRYING_WOOD_TERM] : [])].map(t => <p key={t.title} className="small"><strong>{t.title}.</strong> {t.text}</p>)}
       </section>
 
       <section className="card">

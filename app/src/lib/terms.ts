@@ -52,3 +52,12 @@ export const TERMS_DRAFT = [
       'The office will contact you to schedule.',
   },
 ];
+
+// Shown only when the plan includes a dehumidifier or encapsulation (Nathan 2026-11-23).
+export const DRYING_WOOD_TERM = {
+  title: 'Drying of previously wet wood',
+  text:
+    'Wood that has been soaked by crawl space moisture for years is often already damaged. Once the dehumidifier ' +
+    'dries the crawl space, that wood can crack or "dry rot." This is a natural result of the existing damage, not of ' +
+    'our work, and is not covered by the warranty. Affected wood needs to be replaced; we will point out any we see.',
+};

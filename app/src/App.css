@@ -114,3 +114,4 @@ button.wide { width: 100%; padding: 12px; }
 .pkg-name { width: 100%; box-sizing: border-box; font-weight: 700; }
 .pkg-line { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0 0 8px; font-size: 14px; }
 .pkg-line select { font-size: 13px; padding: 4px 6px; max-width: 50%; }
+.flag { border-color: var(--warn); background: #fff8ef; }

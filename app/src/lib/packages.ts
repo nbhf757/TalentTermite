@@ -4,6 +4,7 @@
 // line to another package.
 import type { BookItem } from './priceBook';
 import { lineTotal } from './pricing';
+import { variantDescription } from './variants';
 
 export type PackageKey = 'structural' | 'water' | 'moisture' | 'exterior' | 'termite' | 'attic' | 'ongoing';
 
@@ -37,7 +38,7 @@ export type Packaging = {
 };
 export const defaultPackaging = (): Packaging => ({ names: {}, moves: {}, combineWater: true, showPackagePrices: false });
 
-export type PkgLine = { key: string; item: BookItem; qty: number };
+export type PkgLine = { key: string; item: BookItem; qty: number; variant?: string };
 export type Package = {
   key: PackageKey; name: string; pitch: string;
   lines: PkgLine[]; scope: string[]; price: number; warranties: string[];
@@ -54,7 +55,9 @@ export function scopeText(l: PkgLine): string {
     if (item.unit === 'sf' || item.unit === 'lf' || item.unit === 'hour') q = `${fmtQty(qty)} ${UNIT[item.unit]}`;
     else if (item.unit === 'each' && qty !== 1) q = `qty ${fmtQty(qty)}`;
   }
-  if (item.description) return q ? item.description.replace(/\.?$/, ` (${q}).`) : item.description;
+  const desc = variantDescription(item.name, l.variant) ?? item.description;
+  // quantity goes at the end of the first sentence
+  if (desc) return q ? (/\.(\s|$)/.test(desc) ? desc.replace(/\.(\s|$)/, ` (${q}).$1`) : `${desc} (${q}).`) : desc;
   return item.name + (q ? ` (${q})` : '');
 }
 

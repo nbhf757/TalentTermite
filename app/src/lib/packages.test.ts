@@ -44,3 +44,11 @@ describe('packages', () => {
     expect(scopeText(line('Termidor HE Termite Treatment', 140))).not.toMatch(/\$/);
   });
 });
+
+describe('beam replace or reinforce', () => {
+  it('scope text follows the rep choice', () => {
+    expect(scopeText(line('Beam', 1))).toMatch(/^Replace the damaged beam/);
+    expect(scopeText({ ...line('Beam', 1), variant: 'reinforce' })).toMatch(/^Reinforce the damaged beam/);
+    expect(items.some(i => i.name === 'Girder')).toBe(false);
+  });
+});

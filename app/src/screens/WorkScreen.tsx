@@ -5,10 +5,11 @@ import {
   defaultQty, DISCOUNT_ABSOLUTE_MAX, downPayment, lineTotal, quote, recurringSummary,
 } from '../lib/pricing';
 import type { Suggestion } from '../lib/suggestions';
+import { DUMPSTER, TOP_DOWN_SUBFLOOR, VARIANTS } from '../lib/variants';
 import { buildPackages, defaultPackaging, PACKAGE_DEFS, type PackageKey, type Packaging } from '../lib/packages';
 
-export type WorkLine = { key: string; itemId: string; qty: number | null; note?: string }; // qty null = follow the drawing
-export type Work = { lines: WorkLine[]; discountPct: number; approver: string; down: { amount?: number; pct?: number }; packaging?: Packaging };
+export type WorkLine = { key: string; itemId: string; qty: number | null; note?: string; variant?: string }; // qty null = follow the drawing
+export type Work = { lines: WorkLine[]; discountPct: number; approver: string; down: { amount?: number; pct?: number }; packaging?: Packaging; topDownAck?: boolean };
 export const emptyWork = (): Work => ({ lines: [], discountPct: 0, approver: '', down: {}, packaging: defaultPackaging() });
 
 const GROUPS: { key: string; title: string; sections: BookItem['section'][] }[] = [
@@ -91,6 +92,11 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
                     <input inputMode="decimal" value={l.qty} onChange={e => patchLine(l.key, { qty: e.target.value === '' ? null : Number(e.target.value) })} />
                   </label>
                 )}
+                {VARIANTS[l.item.name] && (
+                  <select value={l.variant ?? VARIANTS[l.item.name][0].key} onChange={e => patchLine(l.key, { variant: e.target.value })}>
+                    {VARIANTS[l.item.name].map(v => <option key={v.key} value={v.key}>{v.label}</option>)}
+                  </select>
+                )}
                 <strong className="line-total">{$(l.total)}</strong>
                 <button className="x" title="Remove" onClick={() => set({ lines: work.lines.filter(x => x.key !== l.key) })}>×</button>
               </div>
@@ -109,7 +115,7 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
       {lines.length > 0 && (() => {
         const pk = work.packaging ?? defaultPackaging();
         const setPk = (patch: Partial<Packaging>) => set({ packaging: { ...pk, ...patch } });
-        const packages = buildPackages(lines, pk);
+        const packages = buildPackages(lines, pk); // lines carry variant
         return (
           <section className="card">
             <h3>Packages the customer will see</h3>
@@ -136,6 +142,18 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
           </section>
         );
       })()}
+
+      {lines.some(l => l.item.name === TOP_DOWN_SUBFLOOR) && (
+        <section className="card flag">
+          <h3>Top-down subfloor</h3>
+          <p className="small">Make sure demo is covered and the dumpster fee is included. The proposal tells the customer they are responsible for replacing the finished flooring.</p>
+          {!lines.some(l => l.item.name === DUMPSTER) && byName.get(DUMPSTER) && (
+            <button className="chip" onClick={() => addItem(byName.get(DUMPSTER)!)}>+ {DUMPSTER}</button>
+          )}
+          <label className="check small"><input type="checkbox" checked={!!work.topDownAck} onChange={e => set({ topDownAck: e.target.checked })} />
+            Demo and dumpster are covered, and I told the customer about the flooring</label>
+        </section>
+      )}
 
       <section className="card summary">
         <div className="sum-row"><span>Subtotal</span><span>{$(q.subtotal)}</span></div>
@@ -189,5 +207,6 @@ export function workIsSellable(work: Work, book: PriceBook, totals: Totals) {
   if (q.discountStatus === 'over_max') problems.push(`Discount is over ${DISCOUNT_ABSOLUTE_MAX}%.`);
   if (q.discountStatus === 'needs_approval' && !work.approver) problems.push('Choose who approved the 10% discount.');
   if (dp.belowRequired) problems.push('Down payment is below the required amount.');
+  if (lines.some(l => l.item.name === TOP_DOWN_SUBFLOOR) && !work.topDownAck) problems.push('Confirm demo, dumpster, and flooring notice for the top-down subfloor.');
   return { quote: q, down: dp, problems };
 }
