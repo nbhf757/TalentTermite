@@ -12,6 +12,7 @@ import { clearDraft, loadDraft, saveDraft } from './lib/draft';
 import { supabase } from './lib/supabase';
 import SignIn, { ALLOWED_DOMAIN, isAllowedEmail, useSession } from './components/SignIn';
 import { buildSubmission, submitProposal } from './lib/submit';
+import PriceEditor from './screens/PriceEditor';
 import './App.css';
 
 const STEPS = ['Customer', 'Drawing', 'Inspection', 'Work', 'Proposal'] as const;
@@ -37,6 +38,13 @@ export default function App() {
   const [customer, setCustomer] = useState<Customer>(init.customer);
   const [signoff, setSignoff] = useState<Signoff>(init.signoff);
   const session = useSession();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [editingPrices, setEditingPrices] = useState(false);
+  useEffect(() => {
+    if (!session || !supabase) { setIsAdmin(false); return; }
+    supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle()
+      .then(({ data }) => setIsAdmin(data?.role === 'admin'));
+  }, [session]);
 
   useEffect(() => {
     saveDraft<Draft>({ step, sections, answers, comments, work, brand, customer, signoff });
@@ -115,9 +123,11 @@ export default function App() {
         <span className="sub">Inspection &amp; Proposal</span>
         <span className="top-actions">
           <button className="top-btn" onClick={startNew}>New</button>
+          {isAdmin && <button className="top-btn" onClick={() => setEditingPrices(true)}>Prices</button>}
           <button className="top-btn" title={session.user.email} onClick={() => supabase!.auth.signOut()}>Sign out</button>
         </span>
       </header>
+      {editingPrices ? <main><PriceEditor onClose={() => { setEditingPrices(false); loadPriceBook().then(setBook); }} /></main> : <>
       <nav className="steps">
         {STEPS.map((s, i) => (
           <button key={s} className={s === step ? 'step active' : 'step'} onClick={() => setStep(s)}>{i + 1}. {s}</button>
@@ -137,6 +147,7 @@ export default function App() {
             comments={comments} signoff={signoff} onSignoff={setSignoff} onRetry={trySend} onSaveUnsigned={saveUnsigned} />
         )}
       </main>
+      </>}
     </div>
   );
 }

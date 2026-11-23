@@ -117,3 +117,8 @@ button.wide { width: 100%; padding: 12px; }
 .flag { border-color: var(--warn); background: #fff8ef; }
 .ok { color: #1a7f37; font-weight: 600; }
 .unsigned-save { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e5e7eb; }
+.price-row { border-top: 1px solid var(--line); padding: 10px 0; }
+.price-row.dirty { background: #fffbeb; }
+.price-name { margin-bottom: 6px; }
+.price-row textarea { width: 100%; box-sizing: border-box; font: inherit; }
+.save-bar { position: sticky; bottom: 0; background: #fff; border-top: 1px solid var(--line); padding: 10px 0; display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
