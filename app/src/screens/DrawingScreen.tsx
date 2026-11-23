@@ -4,6 +4,8 @@ import {
   type AreaType, type Section, type Wall,
 } from '../lib/footprint';
 import DragDraw from '../components/DragDraw';
+import SketchImport from '../components/SketchImport';
+import { extraToWalls, type SketchExtra } from '../lib/sketchImport';
 
 const DIRS: { label: string; deg: number }[] = [
   { label: '→', deg: 0 }, { label: '↓', deg: 90 }, { label: '←', deg: 180 }, { label: '↑', deg: 270 },
@@ -71,6 +73,15 @@ export default function DrawingScreen({ sections, setSections }: {
 
   const numOrNull = (v: string) => (v.trim() === '' ? null : Number(v));
 
+  const applySketch = (walls: Wall[], extras: SketchExtra[]) => {
+    if (active.walls.length && !confirm(`Replace the ${active.walls.length} walls already drawn in "${active.label}"?`)) return;
+    const added: Section[] = extras.map((x, i) => ({
+      ...newSection(sections.length + 1 + i), label: x.label && x.label !== x.kind ? `${x.kind} (${x.label})` : x.kind,
+      areaType: 'porch', includeInTotals: false, walls: extraToWalls(x),
+    }));
+    setSections(ss => [...ss.map(s => (s.id === activeId ? { ...s, walls, overridePerimeterLf: null, overrideAreaSf: null } : s)), ...added]);
+  };
+
   return (
     <div className="screen">
       <h2>Foundation drawing</h2>
@@ -99,6 +110,8 @@ export default function DrawingScreen({ sections, setSections }: {
           Include in totals
         </label>
       </div>
+
+      <SketchImport onUse={applySketch} />
 
       <div className="chips" style={{ marginBottom: 8 }}>
         <button className={mode === 'pad' ? 'opt active' : 'opt'} onClick={() => setMode('pad')}>Arrow pad</button>

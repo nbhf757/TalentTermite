@@ -130,3 +130,4 @@ button.wide { width: 100%; padding: 12px; }
 .dd-end { fill: #2563eb; }
 .dd-sel { stroke: #f59e0b !important; }
 .dd-edit { background: #fffbeb; padding: 8px; border-radius: 8px; }
+.sketch-import { margin: 8px 0 12px; }
