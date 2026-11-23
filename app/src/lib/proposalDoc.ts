@@ -7,6 +7,8 @@ import type { Suggestion } from './suggestions';
 import { COMPANY, DRYING_WOOD_TERM, FINANCING, INTRO, NOTICES, TERMS_DRAFT, WARRANTY } from './terms';
 import { buildPackages, defaultPackaging } from './packages';
 import { workIsSellable, type Work } from '../screens/WorkScreen';
+import { encapsulationIncludes, isEncapsulation } from './variants';
+import { FINANCING_QR } from './financingQr';
 import { BRANDS, type Brand, type Customer } from '../screens/CustomerScreen';
 
 export type PaymentMethod = '' | 'check_cash' | 'card' | 'finance_sac' | 'finance_5yr';
@@ -21,7 +23,8 @@ export type DocBlock =
   | { kind: 'p'; text: string }
   | { kind: 'small'; text: string }
   | { kind: 'li'; text: string }
-  | { kind: 'row'; text: string; right: string; bold?: boolean };
+  | { kind: 'row'; text: string; right: string; bold?: boolean }
+  | { kind: 'qr'; text: string; png: string };   // base64 PNG with a caption
 
 export type ProposalDoc = {
   brand: string; company: typeof COMPANY;
@@ -81,15 +84,16 @@ export function buildProposalDoc(input: ProposalInput, now = new Date()): Propos
     p.lines.forEach((l, i) => {
       const note = recurringNote(l.item);
       b.push({ kind: 'li', text: p.scope[i] + (note ? ` (${note})` : '') });
+      if (isEncapsulation(l.item.name)) b.push({ kind: 'small', text: encapsulationIncludes(input.work.ventCount) });
     });
     if (p.warranties.length) b.push({ kind: 'small', text: `Includes: ${p.warranties.join(' · ')}` });
   }
   const q = v.quote;
   if (q.discountAmount > 0) {
     b.push({ kind: 'row', text: 'Plan value', right: money(q.subtotal) });
-    b.push({ kind: 'row', text: `Discount (${q.discountPct}%)`, right: `-${money(q.discountAmount)}` });
+    b.push({ kind: 'row', text: `${input.work.military ? 'Military discount' : 'Discount'} (${q.discountPct}%)`, right: `-${money(q.discountAmount)}` });
   }
-  b.push({ kind: 'row', text: 'Total', right: money(q.total), bold: true });
+  b.push({ kind: 'row', text: 'Total Investment', right: money(q.total), bold: true });
   for (const [k, amt] of Object.entries(v.ongoing)) b.push({ kind: 'row', text: 'Ongoing', right: `${money(amt)} ${INTERVAL[k]}` });
   if (v.down.amount > 0) {
     b.push({ kind: 'row', text: `Down payment (${v.down.pct}%)`, right: money(v.down.amount) });
@@ -104,7 +108,10 @@ export function buildProposalDoc(input: ProposalInput, now = new Date()): Propos
 
   b.push({ kind: 'h', text: 'Payment' });
   b.push({ kind: 'p', text: method ? METHOD_LABEL[method] : 'Not chosen' });
-  if (method.startsWith('finance')) b.push({ kind: 'small', text: `${FINANCING.note} The office will send the EnerBank application. Work is scheduled after approval.` });
+  if (method.startsWith('finance')) b.push({ kind: 'small', text: FINANCING.note });
+  b.push({ kind: 'small', text: `Financing available through Regions Bank. ${FINANCING.apply}` });
+  for (const qr of FINANCING_QR) b.push({ kind: 'qr', text: qr.label, png: qr.png });
+  b.push({ kind: 'small', text: '*Subject to credit approval.' });
 
   b.push({ kind: 'h', text: 'Terms' });
   for (const t of v.terms) b.push({ kind: 'small', text: `${t.title}. ${t.text}` });

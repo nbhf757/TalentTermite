@@ -12,19 +12,19 @@ describe('packages', () => {
     for (const i of items) expect(packageFor(i)).toBeTruthy();
     expect(packageFor(get('French Drain (inside)'))).toBe('water');
     expect(packageFor(get('Drip Edge (one story)'))).toBe('exterior');
-    expect(packageFor(get('Vapor Barrier (20 mil)'))).toBe('moisture');
+    expect(packageFor(get('Vapor Barrier (10 mil), staked'))).toBe('moisture');
     expect(packageFor(get('Talent Plus'))).toBe('ongoing');
   });
 
   it('bundles lines and prices each package once', () => {
     const pk = buildPackages([
-      line('Vapor Barrier (20 mil)', 1000), line('Dehumidifier (with electrician)', 1),
+      line('Vapor Barrier (10 mil), taped seams', 1000), line('Dehumidifier (with electrician)', 1),
       line('French Drain (inside)', 100), line('Floor Joist', 2), line('Termidor HE Termite Treatment', 40),
     ], defaultPackaging());
     expect(pk.map(p => p.key)).toEqual(['structural', 'moisture', 'termite']);
     const m = pk[1];
     expect(m.name).toBe('Crawl Space Waterproofing & Moisture Control Package');
-    expect(m.price).toBe(3550 + 3800 + 3500);
+    expect(m.price).toBe(1750 + 3800 + 3500);
     expect(m.warranties).toContain('Aprilaire 5-year dehumidifier warranty');
     expect(pk[2].price).toBe(425); // minimum applies inside the package
   });
@@ -37,7 +37,7 @@ describe('packages', () => {
   });
 
   it('scope text has quantities, never prices', () => {
-    expect(scopeText(line('Vapor Barrier (20 mil)', 1452))).toMatch(/^Install a premium 20 mil .*\(1,452 sq ft\)\.$/);
+    expect(scopeText(line('Vapor Barrier (10 mil), staked', 1452))).toMatch(/^Install a 10 mil .*staked .*\(1,452 sq ft\)\.$/);
     expect(scopeText(line('Floor Joist', 3))).toMatch(/floor joists .*\(qty 3\)\.$/);
     expect(scopeText(line('Talent Plus', 1))).toMatch(/^General pest and rodent control/);
     expect(scopeText({ key: 'x', qty: 2, item: { ...get('Floor Joist'), description: null } })).toBe('Floor Joist (qty 2)');

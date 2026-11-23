@@ -12,7 +12,7 @@ export const INTRO =
   'covering your crawlspace and foundation, attic, interior, and exterior. Below are the findings and the work we recommend.';
 
 export const NOTICES = [
-  'If financing through EnerBank, application approval is required before we can schedule the work.',
+  'If financing through Regions Bank, application approval is required before we can schedule the work.',
   'All jobs over $4,000 require a 25% down payment before starting the work.',
 ];
 
@@ -22,9 +22,10 @@ export const WARRANTY = {
 };
 
 export const FINANCING = {
-  sameAsCash: 'EnerBank: 9 months same as cash',
-  fiveYear: 'EnerBank: 5-year low monthly installment plan',
+  sameAsCash: 'Regions Bank: 9 months same as cash (loan code D4377)',
+  fiveYear: 'Regions Bank: 9.99% APR 5-year loan (loan code DEL2674)',
   note: 'No penalty for early payoff. Subject to credit approval.',
+  apply: 'Scan a code below with your phone camera to prequalify with Regions Bank. Work is scheduled after approval.',
 };
 
 // DRAFT: awaiting Nathan's approval.

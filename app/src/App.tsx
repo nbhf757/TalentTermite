@@ -143,7 +143,7 @@ export default function App() {
           <WorkScreen book={book} totals={sum} suggestions={suggestions} work={work} onChange={setWork} />
         )}
         {step === 'Proposal' && (
-          <ProposalScreen brand={brand} customer={customer} book={book} totals={sum} work={work} suggestions={suggestions}
+          <ProposalScreen brand={brand} customer={customer} book={book} totals={sum} work={work} suggestions={suggestions} answers={answers}
             comments={comments} signoff={signoff} onSignoff={setSignoff} onRetry={trySend} onSaveUnsigned={saveUnsigned} />
         )}
       </main>

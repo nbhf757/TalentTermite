@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { optionsFor, progress, SECTIONS, isAnswered, type Answers, type Point } from '../lib/inspection';
+import { isNegative, negativePoints, optionsFor, progress, SECTIONS, isAnswered, type Answers, type Point } from '../lib/inspection';
 
 function PointRow({ p, answers, set }: { p: Point; answers: Answers; set: (k: string, v: string, note?: string) => void }) {
   const a = answers[p.key];
   const opts = optionsFor(p);
   const [showNote, setShowNote] = useState(!!a?.note);
   return (
-    <div className={isAnswered(p, a) ? 'point done' : 'point'}>
+    <div className={`point${isAnswered(p, a) ? ' done' : ''}${isNegative(p.key, a) ? ' negative' : ''}`}>
       <div className="point-label">{p.label}</div>
       <div className="point-answer">
         {opts ? opts.map(o => (
@@ -34,9 +34,12 @@ export default function InspectionScreen({ answers, onChange, comments, onCommen
 }) {
   const prog = progress(answers);
   const set = (k: string, value: string, note?: string) => onChange({ ...answers, [k]: { value, note } });
+  const negatives = negativePoints(answers);
+  const needComments = negatives.length > 0 && comments.trim() === '';
   return (
     <div className="screen">
       <h2>27-point inspection</h2>
+      <p className="small muted">Take five wood moisture readings in the crawl space: front right, front left, rear right, rear left, and center.</p>
       <p className={prog.complete ? '' : 'warn'}>{prog.done} of {prog.total} points answered</p>
       {SECTIONS.map(s => (
         <section key={s.key} className="insp-section">
@@ -44,9 +47,13 @@ export default function InspectionScreen({ answers, onChange, comments, onCommen
           {s.points.map(p => <PointRow key={p.key} p={p} answers={answers} set={set} />)}
         </section>
       ))}
-      <label className="block">Comments
-        <textarea rows={4} value={comments} onChange={e => onComments(e.target.value)} />
-      </label>
+      {(negatives.length > 0 || comments.trim() !== '') && (
+        <label className={`block${needComments ? ' required' : ''}`}>Comments{negatives.length > 0 && ' (required)'}
+          {negatives.length > 0 && <span className="small muted block-note">Describe what you found for: {negatives.join(', ')}.</span>}
+          <textarea rows={4} value={comments} onChange={e => onComments(e.target.value)}
+            placeholder="What you saw, where, and how bad" aria-required={negatives.length > 0} />
+        </label>
+      )}
     </div>
   );
 }

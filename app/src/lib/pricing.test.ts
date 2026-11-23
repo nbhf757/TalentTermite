@@ -36,6 +36,13 @@ describe('pricing', () => {
     expect(discountStatus(12)).toBe('over_max');
   });
 
+  it('a military discount under 10% does not flag the manager', () => {
+    const l = [{ item: item({ unit_price: 10 }), qty: 100 }];
+    expect(quote(l, 8).discountStatus).toBe('manager_flag');
+    expect(quote(l, 8, { military: true }).discountStatus).toBe('ok');
+    expect(quote(l, 10, { military: true }).discountStatus).toBe('needs_approval');
+  });
+
   it('jobs over $4,000 require 25% down', () => {
     const vb = item({ unit_price: 3.8 });
     const q = quote([{ item: vb, qty: 1452 }], 0);

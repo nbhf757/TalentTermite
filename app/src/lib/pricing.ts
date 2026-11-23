@@ -66,7 +66,8 @@ export type Quote = {
   requiredDown: number;
 };
 
-export function quote(lines: Line[], discountPct: number): Quote {
+/** military: a military discount under 10% doesn't flag the manager (Nathan 2026-11-23). */
+export function quote(lines: Line[], discountPct: number, opts: { military?: boolean } = {}): Quote {
   const subtotal = r2(lines.reduce((s, l) => s + lineTotal(l), 0));
   const pct = Math.max(0, discountPct);
   const discountAmount = r2(subtotal * pct / 100);
@@ -74,7 +75,7 @@ export function quote(lines: Line[], discountPct: number): Quote {
   const requiredDownPct = total > DEPOSIT_THRESHOLD ? DEPOSIT_PCT : 0;
   return {
     subtotal, discountPct: pct, discountAmount, total,
-    discountStatus: discountStatus(pct),
+    discountStatus: opts.military && discountStatus(pct) === 'manager_flag' ? 'ok' : discountStatus(pct),
     requiredDownPct,
     requiredDown: r2(total * requiredDownPct / 100),
   };

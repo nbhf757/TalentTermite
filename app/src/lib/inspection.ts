@@ -31,3 +31,32 @@ export function progress(answers: Answers) {
   const missing = ALL_POINTS.filter(p => !isAnswered(p, answers[p.key])).map(p => p.key);
   return { done, total: ALL_POINTS.length, complete: done === ALL_POINTS.length, missing };
 }
+
+// Nathan 2026-11-23: five wood moisture readings in the crawl space.
+export const MOISTURE_KEYS = ['crawl_moisture_fr', 'crawl_moisture_fl', 'crawl_moisture_rr', 'crawl_moisture_rl', 'crawl_moisture_center'];
+export const WOOD_MOISTURE_PCT = 20; // DRAFT threshold
+export const ATTIC_R49_INCHES = 13;
+
+/** Highest of the moisture readings entered, or null when none are numbers. */
+export function maxMoisture(answers: Answers): number | null {
+  const nums = MOISTURE_KEYS.map(k => answers[k]?.value ?? '').filter(v => v.trim() !== '' && Number.isFinite(Number(v))).map(Number);
+  return nums.length ? Math.max(...nums) : null;
+}
+
+// Answers that point to a problem. When any are present the rep must write inspection comments.
+const yes = (v: string) => v === 'Yes', no = (v: string) => v === 'No';
+const NEGATIVE: Record<string, (v: string) => boolean> = {
+  crawl_ventilation: no, crawl_musty: yes, crawl_standing_water: yes,
+  crawl_vapor_barrier: v => v === 'Needs Attention',
+  crawl_damaged_wood: yes, crawl_foundation_cracks: yes, crawl_fungus: yes, crawl_rodents: yes,
+  crawl_entry_points: yes, crawl_termites: yes,
+  attic_ventilation: no, attic_insulation_depth: v => v.trim() !== '' && Number(v) < ATTIC_R49_INCHES,
+  attic_rodents: yes, attic_entry_points: v => v === 'Needs Attention', attic_termites: yes,
+  int_pests: yes, int_droppings: yes, int_rodents: yes, int_entry_points: yes,
+  ext_trees_over_roof: yes, ext_window_screens: no, ext_nearby_water: yes, ext_gutters_clear: no, ext_brick_cracks: yes,
+  ...Object.fromEntries(MOISTURE_KEYS.map(k => [k, (v: string) => v.trim() !== '' && Number(v) >= WOOD_MOISTURE_PCT])),
+};
+export const isNegative = (key: string, a?: Answer) => !!a && !!NEGATIVE[key]?.(a.value);
+/** Labels of the points whose answers need attention, in form order. */
+export const negativePoints = (answers: Answers) => ALL_POINTS.filter(p => isNegative(p.key, answers[p.key])).map(p => p.label);
+export const commentsMissing = (answers: Answers, comments: string) => negativePoints(answers).length > 0 && comments.trim() === '';

@@ -5,11 +5,15 @@ import {
   defaultQty, DISCOUNT_ABSOLUTE_MAX, downPayment, lineTotal, quote, recurringSummary,
 } from '../lib/pricing';
 import type { Suggestion } from '../lib/suggestions';
-import { DUMPSTER, TOP_DOWN_SUBFLOOR, VARIANTS } from '../lib/variants';
+import { DUMPSTER, encapsulationIncludes, includedWithEncapsulation, isEncapsulation, isVaporBarrier, TOP_DOWN_SUBFLOOR, VARIANTS } from '../lib/variants';
 import { buildPackages, defaultPackaging, PACKAGE_DEFS, type PackageKey, type Packaging } from '../lib/packages';
 
 export type WorkLine = { key: string; itemId: string; qty: number | null; note?: string; variant?: string }; // qty null = follow the drawing
-export type Work = { lines: WorkLine[]; discountPct: number; approver: string; down: { amount?: number; pct?: number }; packaging?: Packaging; topDownAck?: boolean };
+export type Work = {
+  lines: WorkLine[]; discountPct: number; approver: string; down: { amount?: number; pct?: number }; packaging?: Packaging; topDownAck?: boolean;
+  military?: boolean;   // military discount: under 10% doesn't flag the manager
+  ventCount?: number;   // required with encapsulation
+};
 export const emptyWork = (): Work => ({ lines: [], discountPct: 0, approver: '', down: {}, packaging: defaultPackaging() });
 
 const GROUPS: { key: string; title: string; sections: BookItem['section'][] }[] = [
@@ -35,18 +39,27 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
     const qty = l.qty ?? defaultQty(item, totals);
     return [{ ...l, item, qty, total: lineTotal({ item, qty }) }];
   });
-  const q = quote(lines.map(l => ({ item: l.item, qty: l.qty })), work.discountPct);
+  const q = quote(lines.map(l => ({ item: l.item, qty: l.qty })), work.discountPct, { military: work.military });
+  const hasEncap = lines.some(l => isEncapsulation(l.item.name));
+  const allowed = (i: BookItem) => !(hasEncap && includedWithEncapsulation(i.name));
   const dp = downPayment(q.total, work.down, q.requiredDown);
   const ongoing = recurringSummary(lines.map(l => l.item));
 
   const set = (patch: Partial<Work>) => onChange({ ...work, ...patch });
   const addItem = (item: BookItem) => {
-    if (work.lines.some(l => l.itemId === item.id)) return;
-    set({ lines: [...work.lines, { key: crypto.randomUUID(), itemId: item.id, qty: null }] });
+    if (work.lines.some(l => l.itemId === item.id) || !allowed(item)) return;
+    // One vapor barrier and one encapsulation per job; encapsulation replaces the items it includes.
+    const keep = work.lines.filter(l => {
+      const n = byId.get(l.itemId)?.name ?? '';
+      if (isVaporBarrier(item.name) && isVaporBarrier(n)) return false;
+      if (isEncapsulation(item.name) && (isEncapsulation(n) || includedWithEncapsulation(n))) return false;
+      return true;
+    });
+    set({ lines: [...keep, { key: crypto.randomUUID(), itemId: item.id, qty: null }] });
   };
   const patchLine = (key: string, p: Partial<WorkLine>) => set({ lines: work.lines.map(l => (l.key === key ? { ...l, ...p } : l)) });
 
-  const pending = suggestions.filter(s => s.itemNames.some(n => { const i = byName.get(n); return i && !work.lines.some(l => l.itemId === i.id); }) || (!s.itemNames.length && s.note));
+  const pending = suggestions.filter(s => s.itemNames.some(n => { const i = byName.get(n); return i && allowed(i) && !work.lines.some(l => l.itemId === i.id); }) || (!s.itemNames.length && s.note));
 
   return (
     <div className="screen">
@@ -64,7 +77,7 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
             <div key={s.point} className="suggest-row">
               <span>{s.reason}{s.note ? ` (${s.note})` : ''}</span>
               <span className="chips">
-                {s.itemNames.map(n => byName.get(n)).filter((i): i is BookItem => !!i && !work.lines.some(l => l.itemId === i.id))
+                {s.itemNames.map(n => byName.get(n)).filter((i): i is BookItem => !!i && allowed(i) && !work.lines.some(l => l.itemId === i.id))
                   .map(i => <button key={i.id} className="chip" onClick={() => addItem(i)}>+ {i.name}</button>)}
               </span>
             </div>
@@ -74,7 +87,7 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
 
       {GROUPS.map(g => {
         const gl = lines.filter(l => g.sections.includes(l.item.section));
-        const options = book.items.filter(i => g.sections.includes(i.section) && !work.lines.some(l => l.itemId === i.id));
+        const options = book.items.filter(i => g.sections.includes(i.section) && allowed(i) && !work.lines.some(l => l.itemId === i.id));
         return (
           <section key={g.key} className="card">
             <h3>{g.title}</h3>
@@ -103,6 +116,15 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
                 <button className="x" title="Remove" onClick={() => set({ lines: work.lines.filter(x => x.key !== l.key) })}>×</button>
               </div>
             ))}
+            {g.key === 'moisture' && hasEncap && (
+              <div className="encap-box small">
+                <p>{encapsulationIncludes(work.ventCount)} These aren't added separately.</p>
+                <label className={work.ventCount ? '' : 'warn'}>Number of crawl space vents
+                  <input inputMode="numeric" style={{ width: 70 }} value={work.ventCount ?? ''}
+                    onChange={e => { const n = parseInt(e.target.value, 10); set({ ventCount: n > 0 ? n : undefined }); }} />
+                </label>
+              </div>
+            )}
             <div className="row add-line">
               <select value={picker[g.key] ?? ''} onChange={e => setPicker({ ...picker, [g.key]: e.target.value })}>
                 <option value="">Add {g.title.toLowerCase()} item…</option>
@@ -165,6 +187,8 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
           </label>
           <span>−{$(q.discountAmount)}</span>
         </div>
+        <label className="check small"><input type="checkbox" checked={!!work.military} onChange={e => set({ military: e.target.checked })} />
+          Military discount</label>
         {q.discountStatus === 'manager_flag' && <p className="warn">Over 5%: your manager will be flagged.</p>}
         {q.discountStatus === 'needs_approval' && (
           <label className="block warn">10% needs approval from
@@ -174,7 +198,7 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
           </label>
         )}
         {q.discountStatus === 'over_max' && <p className="warn">The most you can discount is {DISCOUNT_ABSOLUTE_MAX}%.</p>}
-        <div className="sum-row total"><span>Total</span><span>{$(q.total)}</span></div>
+        <div className="sum-row total"><span>Total Investment</span><span>{$(q.total)}</span></div>
         {Object.entries(ongoing).map(([k, v]) => (
           <div key={k} className="sum-row muted"><span>Ongoing after the job</span><span>{$(v)}{INTERVAL[k]}</span></div>
         ))}
@@ -202,13 +226,14 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
 export function workIsSellable(work: Work, book: PriceBook, totals: Totals) {
   const byId = new Map(book.items.map(i => [i.id, i]));
   const lines = work.lines.flatMap(l => { const item = byId.get(l.itemId); return item ? [{ item, qty: l.qty ?? defaultQty(item, totals) }] : []; });
-  const q = quote(lines, work.discountPct);
+  const q = quote(lines, work.discountPct, { military: work.military });
   const dp = downPayment(q.total, work.down, q.requiredDown);
   const problems: string[] = [];
   if (!lines.length) problems.push('Add at least one item.');
   if (q.discountStatus === 'over_max') problems.push(`Discount is over ${DISCOUNT_ABSOLUTE_MAX}%.`);
   if (q.discountStatus === 'needs_approval' && !work.approver) problems.push('Choose who approved the 10% discount.');
   if (dp.belowRequired) problems.push('Down payment is below the required amount.');
+  if (lines.some(l => isEncapsulation(l.item.name)) && !(work.ventCount && work.ventCount > 0)) problems.push('Count the crawl space vents for the encapsulation.');
   if (lines.some(l => l.item.name === TOP_DOWN_SUBFLOOR) && !work.topDownAck) problems.push('Confirm demo, dumpster, and flooring notice for the top-down subfloor.');
   return { quote: q, down: dp, problems };
 }

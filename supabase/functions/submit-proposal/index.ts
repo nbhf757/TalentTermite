@@ -15,7 +15,7 @@ const cors = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
-type Block = { kind: 'h' | 'sub' | 'p' | 'small' | 'li' | 'row'; text: string; right?: string; bold?: boolean };
+type Block = { kind: 'h' | 'sub' | 'p' | 'small' | 'li' | 'row' | 'qr'; text: string; right?: string; bold?: boolean; png?: string };
 type Doc = {
   brand: string; date: string; customerLines: string[]; blocks: Block[];
   company: { legal: string; address: string; license: string; phone: string; email: string };
@@ -83,8 +83,27 @@ async function renderPdf(doc: Doc, number: number, sigs: { customer: Uint8Array;
   y = Math.min(y, ry) - 14;
   page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 1, color: accent }); y -= 8;
 
-  for (const b of doc.blocks) {
+  for (let bi = 0; bi < doc.blocks.length; bi++) {
+    const b = doc.blocks[bi];
     switch (b.kind) {
+      case 'qr': {
+        // Consecutive QR blocks sit side by side, each with its caption under it.
+        const run: Block[] = [];
+        while (bi < doc.blocks.length && doc.blocks[bi].kind === 'qr') run.push(doc.blocks[bi++]);
+        bi--;
+        const size = 96, colW = 200; ensure(size + 40); y -= 6; const top = y;
+        let col = 0;
+        for (const q of run) {
+          const bytes = q.png && q.png.length < 40_000 ? Uint8Array.from(atob(q.png), c => c.charCodeAt(0)) : null;
+          if (!bytes) continue;
+          const img = await pdf.embedPng(bytes); const x = M + col * colW;
+          page.drawImage(img, { x, y: top - size, width: size, height: size });
+          let cy = top - size - 11;
+          for (const l of wrap(q.text, reg, 8.5, colW - 10)) { page.drawText(clean(l), { x, y: cy, size: 8.5, font: reg, color: ink }); cy -= 10; }
+          col++;
+        }
+        y = top - size - 34; break;
+      }
       case 'h': ensure(40); y -= 10; para(b.text, 13, bold, accent, 0, 2); break;
       case 'sub': ensure(30); y -= 4; para(b.text, 11, bold); break;
       case 'p': para(b.text, 10); break;
@@ -240,7 +259,7 @@ async function writeBack(db: Db, id: string, number: number, frCustomerId: strin
   } catch (e) { notes.push(`PDF not uploaded to FieldRoutes: ${(e as Error).message}`); }
   if (signed) {
     const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-    const pay = p.payment_method.startsWith('finance') ? 'EnerBank financing - approval needed before scheduling' : (p.payment_method || 'not chosen');
+    const pay = p.payment_method.startsWith('finance') ? 'Regions Bank financing - approval needed before scheduling' : (p.payment_method || 'not chosen');
     const text = `SOLD - schedule proposal #${number} (${p.doc.brand}). Total ${money(p.quote.total)}` +
       (p.quote.down_amount > 0 ? `, ${money(p.quote.down_amount)} down` : '') + `. Payment: ${pay}. Rep: ${repName}. Signed PDF is in Documents.`;
     const t = await frSoldTasks(db, id, frCustomerId, text);
@@ -293,7 +312,7 @@ Deno.serve(async req => {
     if (found) { customerId = found.id; await db.from('customers').update(cust).eq('id', customerId).throwOnError(); }
     else customerId = (await db.from('customers').insert({ ...cust, created_by: rep.id }).select('id').single().throwOnError()).data!.id;
 
-    const fin = p.payment_method === 'finance_sac' ? 'enerbank_9mo_sac' : p.payment_method === 'finance_5yr' ? 'enerbank_5yr' : null;
+    const fin = p.payment_method === 'finance_sac' ? 'regions_9mo_sac' : p.payment_method === 'finance_5yr' ? 'regions_5yr' : null;
     const now = new Date().toISOString();
     const row = {
       client_ref: p.client_ref, customer_id: customerId, brand: p.brand, status: signing ? 'signed' : 'sent',

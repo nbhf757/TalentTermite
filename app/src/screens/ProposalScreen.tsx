@@ -6,6 +6,9 @@ import SignaturePad from '../components/SignaturePad';
 import { INTERVAL, METHOD_LABEL, money as $, proposalView, recurringNote, type PaymentMethod } from '../lib/proposalDoc';
 import { BRANDS, customerReady, type Brand, type Customer } from './CustomerScreen';
 import type { Work } from './WorkScreen';
+import { commentsMissing, type Answers } from '../lib/inspection';
+import { encapsulationIncludes, isEncapsulation } from '../lib/variants';
+import { FINANCING_QR } from '../lib/financingQr';
 
 export type { PaymentMethod };
 export type SaveState =
@@ -21,13 +24,14 @@ export const emptySignoff = (): Signoff => ({ method: '', customerSig: null, rep
 
 const METHODS = Object.entries(METHOD_LABEL) as [Exclude<PaymentMethod, ''>, string][];
 
-export default function ProposalScreen({ brand, customer, book, totals, work, suggestions, comments, signoff, onSignoff, onRetry, onSaveUnsigned }: {
-  brand: Brand; customer: Customer; book: PriceBook; totals: Totals; work: Work; suggestions: Suggestion[];
+export default function ProposalScreen({ brand, customer, book, totals, work, suggestions, answers, comments, signoff, onSignoff, onRetry, onSaveUnsigned }: {
+  brand: Brand; customer: Customer; book: PriceBook; totals: Totals; work: Work; suggestions: Suggestion[]; answers: Answers;
   comments: string; signoff: Signoff; onSignoff: (s: Signoff) => void; onRetry: () => void; onSaveUnsigned: () => void;
 }) {
   const { packaging, packages, quote: q, down, problems, ongoing, hasAprilaire, terms } = proposalView({ book, totals, work });
   const blockers = [...problems];
   if (!customerReady(customer)) blockers.unshift('Finish the customer details.');
+  if (commentsMissing(answers, comments)) blockers.push('Add inspection comments (some points need attention).');
   if (!signoff.method) blockers.push('Choose a payment method.');
   const set = (p: Partial<Signoff>) => onSignoff({ ...signoff, ...p });
   const canSign = blockers.length === 0;
@@ -70,6 +74,7 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
               {p.lines.map((l, i) => (
                 <li key={l.key}>{p.scope[i]}
                   {l.item.recurring_price != null && <span className="muted"> ({recurringNote(l.item)})</span>}
+                  {isEncapsulation(l.item.name) && <div className="muted small">{encapsulationIncludes(work.ventCount)}</div>}
                 </li>
               ))}
             </ul>
@@ -78,8 +83,8 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
         ))}
         <div className="summary">
           {q.discountAmount > 0 && <div className="sum-row"><span>Plan value</span><span>{$(q.subtotal)}</span></div>}
-          {q.discountAmount > 0 && <div className="sum-row"><span>Discount ({q.discountPct}%)</span><span>−{$(q.discountAmount)}</span></div>}
-          <div className="sum-row total"><span>Total</span><span>{$(q.total)}</span></div>
+          {q.discountAmount > 0 && <div className="sum-row"><span>{work.military ? 'Military discount' : 'Discount'} ({q.discountPct}%)</span><span>−{$(q.discountAmount)}</span></div>}
+          <div className="sum-row total"><span>Total Investment</span><span>{$(q.total)}</span></div>
           {Object.entries(ongoing).map(([k, v]) => <div key={k} className="sum-row muted"><span>Ongoing</span><span>{$(v)} {INTERVAL[k]}</span></div>)}
           {down.amount > 0 && <div className="sum-row"><span>Down payment ({down.pct}%)</span><span>{$(down.amount)}</span></div>}
           {down.amount > 0 && <div className="sum-row"><span>Balance at completion</span><span>{$(down.balance)}</span></div>}
@@ -103,7 +108,19 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
             <button key={m} disabled={signed} className={signoff.method === m ? 'opt active' : 'opt'} onClick={() => set({ method: m })}>{label}</button>
           ))}
         </div>
-        {signoff.method.startsWith('finance') && <p className="small">{FINANCING.note} The office will send the EnerBank application. Work is scheduled after approval.</p>}
+        {signoff.method.startsWith('finance') && <p className="small">{FINANCING.note}</p>}
+        <div className="financing">
+          <p className="small"><strong>Financing available through Regions Bank.</strong> {FINANCING.apply}</p>
+          <div className="qr-row">
+            {FINANCING_QR.map(qr => (
+              <figure key={qr.code} className="qr">
+                <img src={`data:image/png;base64,${qr.png}`} alt={`QR code to prequalify, ${qr.label}`} width={140} height={140} />
+                <figcaption className="small">{qr.label}</figcaption>
+              </figure>
+            ))}
+          </div>
+          <p className="muted small">*Subject to credit approval.</p>
+        </div>
         {signoff.method === 'card' && <p className="small muted">The card is entered on FieldRoutes' secure form. Talent never sees or stores the card number.</p>}
       </section>
 

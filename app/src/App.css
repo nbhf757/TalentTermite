@@ -131,3 +131,6 @@ button.wide { width: 100%; padding: 12px; }
 .dd-sel { stroke: #f59e0b !important; }
 .dd-edit { background: #fffbeb; padding: 8px; border-radius: 8px; }
 .sketch-import { margin: 8px 0 12px; }
+.point.negative .point-label { color: #b45309; font-weight: 600; }
+label.block.required textarea { border-color: #b45309; outline: 1px solid #b45309; }
+.block-note { display: block; margin: 2px 0 4px; font-weight: normal; }

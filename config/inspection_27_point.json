@@ -28,8 +28,28 @@
           "type": "yes_no_na"
         },
         {
-          "key": "crawl_wood_moisture",
-          "label": "Wood Moisture Content",
+          "key": "crawl_moisture_fr",
+          "label": "Wood Moisture: Front Right",
+          "type": "percent_or_na"
+        },
+        {
+          "key": "crawl_moisture_fl",
+          "label": "Wood Moisture: Front Left",
+          "type": "percent_or_na"
+        },
+        {
+          "key": "crawl_moisture_rr",
+          "label": "Wood Moisture: Rear Right",
+          "type": "percent_or_na"
+        },
+        {
+          "key": "crawl_moisture_rl",
+          "label": "Wood Moisture: Rear Left",
+          "type": "percent_or_na"
+        },
+        {
+          "key": "crawl_moisture_center",
+          "label": "Wood Moisture: Center",
           "type": "percent_or_na"
         },
         {
