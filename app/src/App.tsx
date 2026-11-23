@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DrawingScreen, { newSection } from './screens/DrawingScreen';
 import InspectionScreen from './screens/InspectionScreen';
 import WorkScreen, { emptyWork, type Work } from './screens/WorkScreen';
@@ -6,11 +6,12 @@ import CustomerScreen, { emptyCustomer, type Brand, type Customer } from './scre
 import ProposalScreen, { emptySignoff, type Signoff } from './screens/ProposalScreen';
 import { totals, type Section } from './lib/footprint';
 import type { Answers } from './lib/inspection';
-import { bundledBook, loadPriceBook, type PriceBook } from './lib/priceBook';
+import { emptyBook, loadPriceBook, type PriceBook } from './lib/priceBook';
 import { suggest } from './lib/suggestions';
 import { clearDraft, loadDraft, saveDraft } from './lib/draft';
 import { supabase } from './lib/supabase';
-import SignIn, { useSession } from './components/SignIn';
+import SignIn, { ALLOWED_DOMAIN, isAllowedEmail, useSession } from './components/SignIn';
+import { buildSubmission, submitProposal } from './lib/submit';
 import './App.css';
 
 const STEPS = ['Customer', 'Drawing', 'Inspection', 'Work', 'Proposal'] as const;
@@ -35,7 +36,6 @@ export default function App() {
   const [brand, setBrand] = useState<Brand>(init.brand);
   const [customer, setCustomer] = useState<Customer>(init.customer);
   const [signoff, setSignoff] = useState<Signoff>(init.signoff);
-  const [showSignIn, setShowSignIn] = useState(false);
   const session = useSession();
 
   useEffect(() => {
@@ -43,16 +43,56 @@ export default function App() {
   }, [step, sections, answers, comments, work, brand, customer, signoff]);
 
   const startNew = () => {
-    if (!window.confirm('Start a new proposal? The current one will be cleared from this device.')) return;
+    const unsent = signoff.signedAt && signoff.save?.status !== 'saved';
+    if (!window.confirm(unsent
+      ? 'This signed proposal has NOT reached the office yet. Clearing it loses it. Start a new proposal anyway?'
+      : 'Start a new proposal? The current one will be cleared from this device.')) return;
     const d = freshDraft(); clearDraft();
     setStep(d.step); setSections(d.sections); setAnswers(d.answers); setComments(d.comments);
     setWork(d.work); setBrand(d.brand); setCustomer(d.customer); setSignoff(d.signoff);
   };
-  const [book, setBook] = useState<PriceBook>(bundledBook);
+  const [book, setBook] = useState<PriceBook>(emptyBook);
 
-  useEffect(() => { loadPriceBook().then(setBook); }, [session]); // reload live prices after sign-in
+  useEffect(() => { if (session) loadPriceBook().then(setBook); }, [session]); // reload live prices after sign-in
   const sum = useMemo(() => totals(sections), [sections]);
   const suggestions = useMemo(() => suggest(answers), [answers]);
+
+  // Send a signed proposal to the office; retried on sign-in, coming back online, and "Try now".
+  const sending = useRef(false);
+  const trySend = useCallback(async () => {
+    const so = signoff;
+    if (!so.signedAt || !so.customerSig || !so.repSig || !so.clientRef || so.save?.status === 'saved' || sending.current) return;
+    sending.current = true;
+    setSignoff({ ...so, save: { status: 'sending' } });
+    try {
+      const payload = buildSubmission({
+        brand, customer, book, totals: sum, work, suggestions, comments, method: so.method,
+        clientRef: so.clientRef, sections, answers, customerSig: so.customerSig, repSig: so.repSig, signedAt: so.signedAt,
+      });
+      const r = await submitProposal(payload);
+      setSignoff({ ...so, save: { status: 'saved', number: r.number, emailed: r.emailed, emailNote: r.email_note } });
+    } catch (e) {
+      setSignoff({ ...so, save: { status: 'waiting', note: (e as Error).message } });
+    } finally { sending.current = false; }
+  }, [signoff, brand, customer, book, sum, work, suggestions, comments, sections, answers]);
+
+  const waiting = !!signoff.signedAt && signoff.save?.status !== 'saved' && signoff.save?.status !== 'sending';
+  useEffect(() => { if (waiting && session) trySend(); }, [waiting, session]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const on = () => { if (waiting) trySend(); };
+    window.addEventListener('online', on); return () => window.removeEventListener('online', on);
+  }, [waiting, trySend]);
+
+  if (session === undefined) return <div className="app" />; // checking the saved login
+  if (!session || !isAllowedEmail(session.user.email)) return (
+    <div className="app">
+      <header className="topbar"><span className="brand">Talent</span><span className="sub">Inspection &amp; Proposal</span></header>
+      <div style={{ padding: '24px 16px', maxWidth: 480, margin: '0 auto' }}>
+        {session && <p className="warn small">Only {ALLOWED_DOMAIN} accounts can use this app. <button className="link" onClick={() => supabase!.auth.signOut()}>Sign out</button></p>}
+        <SignIn />
+      </div>
+    </div>
+  );
 
   return (
     <div className="app">
@@ -61,12 +101,9 @@ export default function App() {
         <span className="sub">Inspection &amp; Proposal</span>
         <span className="top-actions">
           <button className="top-btn" onClick={startNew}>New</button>
-          {supabase && (session
-            ? <button className="top-btn" title={session.user.email} onClick={() => supabase!.auth.signOut()}>Sign out</button>
-            : <button className="top-btn" onClick={() => setShowSignIn(true)}>Sign in</button>)}
+          <button className="top-btn" title={session.user.email} onClick={() => supabase!.auth.signOut()}>Sign out</button>
         </span>
       </header>
-      {showSignIn && !session && <div style={{ padding: '12px 16px 0' }}><SignIn onDone={() => setShowSignIn(false)} /></div>}
       <nav className="steps">
         {STEPS.map((s, i) => (
           <button key={s} className={s === step ? 'step active' : 'step'} onClick={() => setStep(s)}>{i + 1}. {s}</button>
@@ -83,7 +120,7 @@ export default function App() {
         )}
         {step === 'Proposal' && (
           <ProposalScreen brand={brand} customer={customer} book={book} totals={sum} work={work} suggestions={suggestions}
-            comments={comments} signoff={signoff} onSignoff={setSignoff} />
+            comments={comments} signoff={signoff} onSignoff={setSignoff} onRetry={trySend} />
         )}
       </main>
     </div>

@@ -1,8 +1,7 @@
 // Price book with offline fallback, in order of preference:
 // 1. live from Supabase (signed in + online), saved to the device cache
 // 2. the device cache from the last successful load
-// 3. the copy bundled with the app (Sept 2025 pricing sheet)
-import fallback from '../data/fallback_prices.json';
+// Prices are never bundled into the public app code: a device needs one online sign-in to get them.
 import type { PriceItem } from './pricing';
 import { supabase } from './supabase';
 
@@ -13,12 +12,12 @@ export type BookItem = PriceItem & {
   rep_notes: string | null;
   sort_order: number;
 };
-export type BookSource = 'live' | 'cache' | 'bundled';
+export type BookSource = 'live' | 'cache' | 'none';
 export type PriceBook = { items: BookItem[]; source: BookSource; loadedAt: string | null };
 
 const CACHE_KEY = 'talent.priceBook.v1';
 
-export const bundledBook = (): PriceBook => ({ items: fallback.items as BookItem[], source: 'bundled', loadedAt: null });
+export const emptyBook = (): PriceBook => ({ items: [], source: 'none', loadedAt: null });
 
 function readCache(): PriceBook | null {
   try {
@@ -46,5 +45,5 @@ export async function loadPriceBook(): Promise<PriceBook> {
       return { items, source: 'live', loadedAt };
     }
   }
-  return readCache() ?? bundledBook();
+  return readCache() ?? emptyBook();
 }

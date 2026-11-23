@@ -1,0 +1,242 @@
+// Saves a signed proposal from the rep app, renders the signed PDF, and emails the customer a copy.
+// Requires a signed-in user (verify_jwt). Writes with the service role because signatures are server-written only.
+// Safe to retry: the device sends the same client_ref, and an existing proposal is returned as-is.
+// Email: Resend, when the secrets RESEND_API_KEY and EMAIL_FROM are set. Without them the proposal still saves.
+// Request: POST the payload from app/src/lib/submit.ts (buildSubmission).
+// Response: { proposal_id, number, emailed, email_note? }
+import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'npm:pdf-lib@1.17.1';
+
+const cors = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+
+type Block = { kind: 'h' | 'sub' | 'p' | 'small' | 'li' | 'row'; text: string; right?: string; bold?: boolean };
+type Doc = {
+  brand: string; date: string; customerLines: string[]; blocks: Block[];
+  company: { legal: string; address: string; license: string; phone: string; email: string };
+};
+type Payload = {
+  client_ref: string; brand: 'talent_pest' | 'talent_foundation'; signed_at: string;
+  customer: Record<string, string | null>;
+  price_book: { source: string; loaded_at: string | null };
+  quote: { subtotal: number; discount_pct: number; discount_amount: number; total: number; discount_status: string; approver: string | null; down_amount: number; down_pct: number };
+  payment_method: '' | 'check_cash' | 'card' | 'finance_sac' | 'finance_5yr';
+  lines: Record<string, unknown>[]; drawings: Record<string, unknown>[];
+  answers: { point_key: string; answer: string; notes: string | null }[];
+  comments: string; top_down_ack: boolean; doc: Doc;
+  signatures: { customer: string; rep: string };
+};
+
+const APPROVAL: Record<string, string> = { none: 'none', ok: 'none', manager_flag: 'manager_flag', needs_approval: 'approved' };
+
+// ---------- PDF ----------
+// Standard fonts only cover WinAnsi; swap the few characters the app uses that it can't encode.
+const clean = (s: string) => s
+  .replace(/[−‐‑]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+  .replace(/…/g, '...').replace(/≥/g, '>=').replace(/≤/g, '<=')
+  .replace(/[^\x20-\x7E -ÿ–—•€™]/g, '');
+
+function wrap(text: string, font: PDFFont, size: number, width: number): string[] {
+  const out: string[] = [];
+  for (const para of clean(text).split('\n')) {
+    let line = '';
+    for (const word of para.split(/\s+/)) {
+      const t = line ? `${line} ${word}` : word;
+      if (font.widthOfTextAtSize(t, size) <= width || !line) line = t;
+      else { out.push(line); line = word; }
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+async function renderPdf(doc: Doc, number: number, sigs: { customer: Uint8Array; rep: Uint8Array },
+  names: { customer: string; rep: string }, signedAt: string) {
+  const pdf = await PDFDocument.create();
+  pdf.setTitle(`${doc.brand} proposal #${number}`); pdf.setAuthor(doc.company.legal);
+  const reg = await pdf.embedFont(StandardFonts.Helvetica), bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const W = 612, H = 792, M = 50, CW = W - 2 * M;
+  const ink = rgb(0.1, 0.1, 0.1), muted = rgb(0.4, 0.4, 0.4), accent = rgb(0.05, 0.3, 0.45);
+  let page: PDFPage = pdf.addPage([W, H]); let y = H - M;
+  const ensure = (h: number) => { if (y - h < M + 20) { page = pdf.addPage([W, H]); y = H - M; } };
+  const text = (s: string, x: number, size: number, f = reg, color = ink) => page.drawText(clean(s), { x, y, size, font: f, color });
+  const para = (s: string, size: number, f = reg, color = ink, indent = 0, gap = 4) => {
+    for (const l of wrap(s, f, size, CW - indent)) { ensure(size + 3); y -= size + 3; text(l, M + indent, size, f, color); }
+    y -= gap;
+  };
+
+  // Header
+  y -= 20; text(doc.brand, M, 20, bold, accent);
+  const right = [`Proposal #${number}`, doc.date, ...doc.customerLines];
+  let ry = H - M - 12;
+  for (const [i, l] of right.entries()) {
+    const f = i === 0 ? bold : reg, s = clean(l).slice(0, 70);
+    page.drawText(s, { x: W - M - f.widthOfTextAtSize(s, 10), y: ry, size: 10, font: f, color: i ? muted : ink }); ry -= 13;
+  }
+  y -= 14; text(`${doc.company.legal} · ${doc.company.address}`, M, 9, reg, muted);
+  y -= 12; text(`${doc.company.license} · ${doc.company.phone} · ${doc.company.email}`, M, 9, reg, muted);
+  y = Math.min(y, ry) - 14;
+  page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 1, color: accent }); y -= 8;
+
+  for (const b of doc.blocks) {
+    switch (b.kind) {
+      case 'h': ensure(40); y -= 10; para(b.text, 13, bold, accent, 0, 2); break;
+      case 'sub': ensure(30); y -= 4; para(b.text, 11, bold); break;
+      case 'p': para(b.text, 10); break;
+      case 'small': para(b.text, 8.5, reg, muted); break;
+      case 'li': {
+        const lines = wrap(b.text, reg, 10, CW - 14);
+        lines.forEach((l, i) => { ensure(13); y -= 13; if (i === 0) text('•', M + 2, 10); text(l, M + 14, 10); });
+        y -= 3; break;
+      }
+      case 'row': {
+        ensure(16); y -= 15; const f = b.bold ? bold : reg, size = b.bold ? 12 : 10, r = clean(b.right ?? '');
+        text(b.text, M + CW / 2, size, f); page.drawText(r, { x: W - M - f.widthOfTextAtSize(r, size), y, size, font: f, color: ink });
+        break;
+      }
+    }
+  }
+
+  // Signatures
+  ensure(170); y -= 16; para('Accept and sign', 13, bold, accent, 0, 6);
+  const when = new Date(signedAt).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'long', timeStyle: 'short' }) + ' ET';
+  const boxW = (CW - 20) / 2, boxH = 70, top = y;
+  for (const [i, [label, png, name]] of ([['Customer', sigs.customer, names.customer], ['Talent representative', sigs.rep, names.rep]] as const).entries()) {
+    const x = M + i * (boxW + 20);
+    const img = await pdf.embedPng(png); const scale = Math.min(boxW / img.width, boxH / img.height);
+    page.drawImage(img, { x, y: top - boxH, width: img.width * scale, height: img.height * scale });
+    page.drawLine({ start: { x, y: top - boxH - 4 }, end: { x: x + boxW, y: top - boxH - 4 }, thickness: 0.75, color: muted });
+    page.drawText(clean(`${label}: ${name}`), { x, y: top - boxH - 16, size: 9, font: bold, color: ink });
+    page.drawText(clean(`Signed ${when}`), { x, y: top - boxH - 28, size: 8.5, font: reg, color: muted });
+  }
+  y = top - boxH - 40;
+
+  const pages = pdf.getPages();
+  pages.forEach((p, i) => p.drawText(clean(`${doc.brand} · Proposal #${number} · Page ${i + 1} of ${pages.length}`),
+    { x: M, y: 28, size: 8, font: reg, color: muted }));
+  return await pdf.save();
+}
+
+// ---------- helpers ----------
+const pngBytes = (dataUrl: string) => {
+  const m = /^data:image\/png;base64,(.+)$/.exec(dataUrl ?? '');
+  if (!m) throw new Error('Signature image is missing.');
+  return Uint8Array.from(atob(m[1]), c => c.charCodeAt(0));
+};
+const b64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
+const sha256 = async (bytes: Uint8Array) =>
+  [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
+const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+
+async function emailCustomer(to: string, firstName: string, brand: string, phone: string, number: number, pdf: Uint8Array) {
+  const key = Deno.env.get('RESEND_API_KEY'), from = Deno.env.get('EMAIL_FROM');
+  if (!key || !from) return { ok: false, note: 'Customer email is not set up yet. The office has the signed PDF.' };
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: `${brand} <${from}>`, to: [to], reply_to: Deno.env.get('EMAIL_REPLY_TO') || undefined,
+      subject: `Your signed ${brand} proposal (#${number})`,
+      html: `<p>Hi ${esc(firstName || 'there')},</p><p>Thank you for choosing ${esc(brand)}. Your signed proposal is attached.</p>` +
+        `<p>Our office will contact you to schedule. Questions? Call us at ${esc(phone)}.</p><p>${esc(brand)}</p>`,
+      attachments: [{ filename: `${brand.replace(/\s+/g, '-')}-proposal-${number}.pdf`, content: b64(pdf) }],
+    }),
+  });
+  const body = await r.text();
+  return r.ok ? { ok: true, note: undefined, response: body } : { ok: false, note: `Email failed (${r.status}). The office has the signed PDF.`, response: body.slice(0, 500) };
+}
+
+// ---------- handler ----------
+Deno.serve(async req => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
+  const url = Deno.env.get('SUPABASE_URL')!, service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const db = createClient(url, service, { auth: { persistSession: false } });
+
+  const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+  const { data: u } = await db.auth.getUser(jwt);
+  if (!u?.user) return json({ error: 'Sign in again to send this proposal.' }, 401);
+  const { data: rep } = await db.from('profiles').select('id, full_name, active').eq('id', u.user.id).maybeSingle();
+  if (!rep?.active) return json({ error: 'Your login is not set up as a Talent user yet. Ask Nathan or John.' }, 403);
+
+  let p: Payload;
+  try { p = await req.json(); } catch { return json({ error: 'Bad request' }, 400); }
+  if (!/^[0-9a-f-]{36}$/i.test(p.client_ref ?? '')) return json({ error: 'Missing client_ref' }, 400);
+  if (!p.lines?.length) return json({ error: 'The proposal has no work on it.' }, 400);
+  if (p.quote.discount_pct > 10) return json({ error: 'Discount is over 10%.' }, 400);
+
+  // Retry of a proposal that already saved
+  const { data: existing } = await db.from('proposals').select('id, number, customer_emailed_at').eq('client_ref', p.client_ref).maybeSingle();
+  if (existing) return json({ proposal_id: existing.id, number: existing.number, emailed: !!existing.customer_emailed_at });
+
+  try {
+    const sigs = { customer: pngBytes(p.signatures.customer), rep: pngBytes(p.signatures.rep) };
+    const c = p.customer;
+
+    // Customer: match on the FieldRoutes id when we have one
+    const cust = {
+      fr_customer_id: c.fr_customer_id || null, first_name: c.first_name, last_name: c.last_name, company: c.company || null,
+      phone: c.phone || null, email: c.email || null, address: c.address, city: c.city || null, state: c.state || 'VA', zip: c.zip || null,
+      updated_at: new Date().toISOString(),
+    };
+    let customerId: string;
+    const found = cust.fr_customer_id
+      ? (await db.from('customers').select('id').eq('fr_customer_id', cust.fr_customer_id).maybeSingle()).data : null;
+    if (found) { customerId = found.id; await db.from('customers').update(cust).eq('id', customerId).throwOnError(); }
+    else customerId = (await db.from('customers').insert({ ...cust, created_by: rep.id }).select('id').single().throwOnError()).data!.id;
+
+    const fin = p.payment_method === 'finance_sac' ? 'enerbank_9mo_sac' : p.payment_method === 'finance_5yr' ? 'enerbank_5yr' : null;
+    const { data: prop } = await db.from('proposals').insert({
+      client_ref: p.client_ref, customer_id: customerId, rep_id: rep.id, brand: p.brand, status: 'signed',
+      subtotal: p.quote.subtotal, discount_pct: p.quote.discount_pct, discount_amount: p.quote.discount_amount, total: p.quote.total,
+      discount_approval: APPROVAL[p.quote.discount_status] ?? 'none', discount_approver_name: p.quote.approver,
+      payment_method: fin ? 'financing' : (p.payment_method || null), financing_plan: fin,
+      down_payment_amount: p.quote.down_amount, down_payment_pct: p.quote.down_pct,
+      price_book_version: p.price_book.loaded_at, price_book_source: p.price_book.source,
+      top_down_ack: p.top_down_ack, doc: p.doc, signed_at: p.signed_at,
+    }).select('id, number').single().throwOnError();
+    const id = prop!.id as string, number = prop!.number as number;
+
+    await db.from('proposal_lines').insert(p.lines.map(l => ({ ...l, proposal_id: id }))).throwOnError();
+    if (p.drawings.length) await db.from('drawings').insert(p.drawings.map(d => ({ ...d, proposal_id: id }))).throwOnError();
+    if (p.answers.length) await db.from('inspection_answers').insert(p.answers.map(a => ({ ...a, proposal_id: id }))).throwOnError();
+    await db.from('inspection_header').insert({ proposal_id: id, technician_id: rep.id, inspected_on: p.signed_at.slice(0, 10), comments: p.comments || null }).throwOnError();
+
+    // PDF and signature images
+    const names = { customer: `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim(), rep: rep.full_name };
+    const pdf = await renderPdf(p.doc, number, sigs, names, p.signed_at);
+    const hash = await sha256(pdf);
+    const dir = `${number}`;
+    const up = (path: string, body: Uint8Array, contentType: string) =>
+      db.storage.from('proposals').upload(path, body, { contentType, upsert: true }).then(r => { if (r.error) throw r.error; });
+    await up(`${dir}/signed.pdf`, pdf, 'application/pdf');
+    await up(`${dir}/sig-customer.png`, sigs.customer, 'image/png');
+    await up(`${dir}/sig-rep.png`, sigs.rep, 'image/png');
+
+    const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || null;
+    const ua = req.headers.get('user-agent');
+    await db.from('signatures').insert([
+      { proposal_id: id, signer_role: 'customer', signer_name: names.customer, signature_image_path: `${dir}/sig-customer.png`, signed_at: p.signed_at, ip_address: ip, user_agent: ua, document_sha256: hash, signed_pdf_path: `${dir}/signed.pdf` },
+      { proposal_id: id, signer_role: 'rep', signer_name: names.rep, signature_image_path: `${dir}/sig-rep.png`, signed_at: p.signed_at, ip_address: ip, user_agent: ua, document_sha256: hash, signed_pdf_path: `${dir}/signed.pdf` },
+    ]).throwOnError();
+    await db.from('proposals').update({ signed_pdf_path: `${dir}/signed.pdf`, signed_pdf_sha256: hash }).eq('id', id).throwOnError();
+
+    // Customer copy
+    let emailed = false, note: string | undefined;
+    if (c.email) {
+      const e = await emailCustomer(c.email, c.first_name ?? '', p.doc.brand, p.doc.company.phone, number, pdf);
+      emailed = e.ok; note = e.note;
+      if ('response' in e) await db.from('fr_sync_log').insert({ proposal_id: id, action: 'email_customer', response: { body: e.response }, ok: e.ok });
+      if (emailed) await db.from('proposals').update({ customer_emailed_at: new Date().toISOString() }).eq('id', id);
+    } else note = 'No customer email on file, so no copy was emailed.';
+
+    return json({ proposal_id: id, number, emailed, email_note: note });
+  } catch (e) {
+    const msg = (e as { message?: string }).message ?? String(e);
+    console.error('submit-proposal', msg);
+    return json({ error: `Could not save: ${msg.slice(0, 300)}` }, 500);
+  }
+});

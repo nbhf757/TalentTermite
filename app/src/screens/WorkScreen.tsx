@@ -52,7 +52,9 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
     <div className="screen">
       <h2>Recommended work</h2>
       {book.source !== 'live' && (
-        <p className="muted small">Using {book.source === 'cache' ? `saved prices from ${new Date(book.loadedAt!).toLocaleDateString()}` : 'built-in prices (Sept 2025 sheet)'}. They refresh when you're signed in and online.</p>
+        <p className="muted small">{book.source === 'cache'
+          ? `Using saved prices from ${new Date(book.loadedAt!).toLocaleDateString()}. They refresh when you're online.`
+          : "Prices haven't downloaded to this device yet. Connect to the internet once and they'll load and stay for offline use."}</p>
       )}
 
       {pending.length > 0 && (

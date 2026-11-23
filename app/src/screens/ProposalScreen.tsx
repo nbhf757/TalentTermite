@@ -1,40 +1,30 @@
 import type { Totals } from '../lib/footprint';
 import type { PriceBook } from '../lib/priceBook';
-import { defaultQty, recurringSummary } from '../lib/pricing';
 import type { Suggestion } from '../lib/suggestions';
-import { COMPANY, DRYING_WOOD_TERM, FINANCING, INTRO, NOTICES, TERMS_DRAFT, WARRANTY } from '../lib/terms';
+import { COMPANY, FINANCING, INTRO, NOTICES, WARRANTY } from '../lib/terms';
 import SignaturePad from '../components/SignaturePad';
-import { buildPackages, defaultPackaging } from '../lib/packages';
+import { INTERVAL, METHOD_LABEL, money as $, proposalView, recurringNote, type PaymentMethod } from '../lib/proposalDoc';
 import { BRANDS, customerReady, type Brand, type Customer } from './CustomerScreen';
-import { workIsSellable, type Work } from './WorkScreen';
+import type { Work } from './WorkScreen';
 
-export type PaymentMethod = '' | 'check_cash' | 'card' | 'finance_sac' | 'finance_5yr';
-export type Signoff = { method: PaymentMethod; customerSig: string | null; repSig: string | null; signedAt: string | null };
+export type { PaymentMethod };
+export type SaveState =
+  | { status: 'waiting'; note?: string }                        // signed, not on the server yet
+  | { status: 'sending' }
+  | { status: 'saved'; number: number; emailed: boolean; emailNote?: string };
+export type Signoff = {
+  method: PaymentMethod; customerSig: string | null; repSig: string | null; signedAt: string | null;
+  clientRef?: string; save?: SaveState;
+};
 export const emptySignoff = (): Signoff => ({ method: '', customerSig: null, repSig: null, signedAt: null });
 
-const METHODS: [PaymentMethod, string][] = [
-  ['check_cash', 'Check or cash'], ['card', 'Card (FieldRoutes Payments)'],
-  ['finance_sac', FINANCING.sameAsCash], ['finance_5yr', FINANCING.fiveYear],
-];
-const INTERVAL: Record<string, string> = { month: 'per month', quarter: 'per quarter', year: 'per year', service: 'per service' };
-const $ = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+const METHODS = Object.entries(METHOD_LABEL) as [Exclude<PaymentMethod, ''>, string][];
 
-export default function ProposalScreen({ brand, customer, book, totals, work, suggestions, comments, signoff, onSignoff }: {
+export default function ProposalScreen({ brand, customer, book, totals, work, suggestions, comments, signoff, onSignoff, onRetry }: {
   brand: Brand; customer: Customer; book: PriceBook; totals: Totals; work: Work; suggestions: Suggestion[];
-  comments: string; signoff: Signoff; onSignoff: (s: Signoff) => void;
+  comments: string; signoff: Signoff; onSignoff: (s: Signoff) => void; onRetry: () => void;
 }) {
-  const byId = new Map(book.items.map(i => [i.id, i]));
-  const lines = work.lines.flatMap(l => {
-    const item = byId.get(l.itemId); if (!item) return [];
-    const qty = l.qty ?? defaultQty(item, totals);
-    return [{ key: l.key, item, qty, variant: l.variant }];
-  });
-  const packaging = work.packaging ?? defaultPackaging();
-  const packages = buildPackages(lines, packaging);
-  const { quote: q, down, problems } = workIsSellable(work, book, totals);
-  const ongoing = recurringSummary(lines.map(l => l.item));
-  const hasAprilaire = lines.some(l => /^(Dehumidifier|Full Encapsulation)/.test(l.item.name));
-
+  const { packaging, packages, quote: q, down, problems, ongoing, hasAprilaire, terms } = proposalView({ book, totals, work });
   const blockers = [...problems];
   if (!customerReady(customer)) blockers.unshift('Finish the customer details.');
   if (!signoff.method) blockers.push('Choose a payment method.');
@@ -78,7 +68,7 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
             <ul className="pkg-scope">
               {p.lines.map((l, i) => (
                 <li key={l.key}>{p.scope[i]}
-                  {l.item.recurring_price != null && <span className="muted"> ({l.item.initial_price != null ? `${$(l.item.initial_price)} to start, then ` : ''}{$(l.item.recurring_price)} {INTERVAL[l.item.recurring_interval ?? ''] ?? ''})</span>}
+                  {l.item.recurring_price != null && <span className="muted"> ({recurringNote(l.item)})</span>}
                 </li>
               ))}
             </ul>
@@ -118,7 +108,7 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
 
       <section className="card">
         <h3>Terms <span className="draft-tag">DRAFT wording, needs approval</span></h3>
-        {[...TERMS_DRAFT, ...(hasAprilaire ? [DRYING_WOOD_TERM] : [])].map(t => <p key={t.title} className="small"><strong>{t.title}.</strong> {t.text}</p>)}
+        {terms.map(t => <p key={t.title} className="small"><strong>{t.title}.</strong> {t.text}</p>)}
       </section>
 
       <section className="card">
@@ -127,15 +117,34 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
         {canSign && !signed && (<>
           <SignaturePad label={`Customer: ${customer.first_name} ${customer.last_name}`} value={signoff.customerSig} onChange={v => set({ customerSig: v })} />
           <SignaturePad label="Talent representative" value={signoff.repSig} onChange={v => set({ repSig: v })} />
-          <button className="primary wide" disabled={!signoff.customerSig || !signoff.repSig} onClick={() => set({ signedAt: new Date().toISOString() })}>
+          <button className="primary wide" disabled={!signoff.customerSig || !signoff.repSig} onClick={() => set({ signedAt: new Date().toISOString(), clientRef: crypto.randomUUID(), save: { status: 'waiting' } })}>
             Accept and sign
           </button>
         </>)}
-        {signed && (
+        {signed && (<>
           <p><strong>Signed {new Date(signoff.signedAt!).toLocaleString()}.</strong> A copy will be emailed to you, and our office will contact you to schedule.</p>
-        )}
+          <SaveStatus save={signoff.save} email={customer.email} onRetry={onRetry} />
+        </>)}
       </section>
       <p className="muted small center">Questions? Call us at {COMPANY.phone} | {COMPANY.email}</p>
+    </div>
+  );
+}
+
+/** Rep-facing: whether the signed proposal reached the office. */
+function SaveStatus({ save, email, onRetry }: { save?: SaveState; email: string; onRetry: () => void }) {
+  if (!save) return null;
+  if (save.status === 'sending') return <p className="small muted">Sending to the office…</p>;
+  if (save.status === 'saved') return (
+    <p className="small ok">
+      Saved as proposal #{save.number}.{' '}
+      {save.emailed ? `PDF emailed to ${email}.` : save.emailNote ?? 'PDF saved; no customer email was sent.'}
+    </p>
+  );
+  return (
+    <div className="small warn">
+      Not sent to the office yet{save.note ? `: ${save.note}` : '.'} It is kept on this device and sends automatically.
+      {' '}<button className="link" onClick={onRetry}>Try now</button>
     </div>
   );
 }
