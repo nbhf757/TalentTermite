@@ -4,7 +4,7 @@ import { ALL_POINTS, isAnswered, progress, SECTIONS } from './inspection';
 describe('27-point inspection', () => {
   it('has the 27 form points plus insulation type, in 4 sections', () => {
     expect(ALL_POINTS).toHaveLength(28);
-    expect(SECTIONS.map(s => s.points.length)).toEqual([12, 5, 4, 6]);
+    expect(SECTIONS.map(s => s.points.length)).toEqual([12, 6, 4, 6]);
   });
 
   it('validates answers by type', () => {
@@ -21,6 +21,6 @@ describe('27-point inspection', () => {
     const p = progress({ crawl_musty: { value: 'Yes' } });
     expect(p.done).toBe(1);
     expect(p.complete).toBe(false);
-    expect(p.missing).toHaveLength(26);
+    expect(p.missing).toHaveLength(27);
   });
 });

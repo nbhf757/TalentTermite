@@ -8,8 +8,8 @@ type Row = {
   unit_price: number; min_price: number | null; initial_price: number | null; recurring_price: number | null;
   recurring_interval: string | null; active: boolean; sort_order: number; updated_at: string;
 };
-const EDITABLE = ['unit_price', 'min_price', 'initial_price', 'recurring_price', 'description', 'rep_notes', 'active'] as const;
-type Field = (typeof EDITABLE)[number];
+export const EDITABLE_FIELDS = ['unit_price', 'min_price', 'initial_price', 'recurring_price', 'description', 'rep_notes', 'active'] as const;
+type Field = (typeof EDITABLE_FIELDS)[number];
 const SECTIONS: [string, string][] = [['foundation', 'Foundation'], ['moisture', 'Moisture'], ['pest', 'Pest'], ['attic', 'Attic'], ['recurring', 'Ongoing plans']];
 const UNIT: Record<string, string> = { each: 'each', lf: 'per lf', sf: 'per sq ft', hour: 'per hour', lump: 'flat' };
 
