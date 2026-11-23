@@ -89,7 +89,18 @@ describe('footprint math', () => {
       { id: 'porch', areaType: 'porch', includeInTotals: false, walls: rect(10, 8) },
       { id: 'attic', areaType: 'attic', includeInTotals: true, walls: rect(40, 30), overrideAreaSf: 1405 },
     ]);
-    expect(t).toEqual({ perimeterLf: 140, interiorSf: 1200, atticSf: 1405 });
+    expect(t).toEqual({ perimeterLf: 140, interiorSf: 1200, atticSf: 1405, exteriorLf: 140 });
+  });
+
+  it('adds an attached garage or stoop to the exterior perimeter only', () => {
+    const t = totals([
+      { id: 'main', areaType: 'crawlspace', includeInTotals: true, walls: rect(49, 29) },
+      { id: 's1', areaType: 'porch', includeInTotals: false, exterior: true, sharedWallLf: 6, walls: rect(6, 6) },
+      { id: 's2', areaType: 'porch', includeInTotals: false, exterior: true, sharedWallLf: 16, walls: rect(16, 6) },
+      { id: 'deck', areaType: 'porch', includeInTotals: false, walls: rect(10, 10) },
+    ]);
+    // Nathan's sample: 156 lf house + 2 x 6 ft stoop sides + 2 x 6 ft = 180 lf around the outside
+    expect(t).toEqual({ perimeterLf: 156, interiorSf: 1421, atticSf: 0, exteriorLf: 180 });
   });
 
   it('turn and snap helpers', () => {

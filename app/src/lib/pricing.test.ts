@@ -6,12 +6,13 @@ const item = (p: Partial<PriceItem>): PriceItem => ({
   waste_factor: 1, unit_price: 1, min_price: null, initial_price: null, ...p,
 });
 
-const totals = { perimeterLf: 164, interiorSf: 1320, atticSf: 1405 };
+const totals = { perimeterLf: 164, interiorSf: 1320, atticSf: 1405, exteriorLf: 188 };
 
 describe('pricing', () => {
   it('quantities come from the drawing', () => {
     expect(defaultQty(item({ qty_source: 'interior_sf', waste_factor: 1.1 }), totals)).toBe(1452);
     expect(defaultQty(item({ qty_source: 'perimeter_lf' }), totals)).toBe(164);
+    expect(defaultQty(item({ qty_source: 'exterior_lf' }), totals)).toBe(188);
     expect(defaultQty(item({ qty_source: 'attic_sf' }), totals)).toBe(1405);
     expect(defaultQty(item({ qty_source: 'manual' }), totals)).toBe(1);
   });

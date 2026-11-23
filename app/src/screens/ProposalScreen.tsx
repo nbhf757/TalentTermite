@@ -54,7 +54,7 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
           <ul>{suggestions.map(s => <li key={s.point}>{s.reason}{s.note ? `: ${s.note.toLowerCase()}` : ''}</li>)}</ul>
         </>)}
         {comments && <p className="muted">{comments}</p>}
-        {totals.perimeterLf > 0 && <p className="muted small">Measured: {totals.perimeterLf} lf foundation wall, {totals.interiorSf} sq ft crawlspace{totals.atticSf ? `, ${totals.atticSf} sq ft attic` : ''}.</p>}
+        {totals.perimeterLf > 0 && <p className="muted small">Measured: {totals.exteriorLf} lf exterior perimeter, {totals.perimeterLf} lf foundation wall, {totals.interiorSf} sq ft crawlspace{totals.atticSf ? `, ${totals.atticSf} sq ft attic` : ''}.</p>}
       </section>
 
       <section className="card">

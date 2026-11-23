@@ -71,7 +71,7 @@ export function buildProposalDoc(input: ProposalInput, now = new Date()): Propos
   }
   if (comments.trim()) b.push({ kind: 'p', text: comments.trim() });
   if (totals.perimeterLf > 0) {
-    b.push({ kind: 'small', text: `Measured: ${totals.perimeterLf} lf foundation wall, ${totals.interiorSf} sq ft crawlspace${totals.atticSf ? `, ${totals.atticSf} sq ft attic` : ''}.` });
+    b.push({ kind: 'small', text: `Measured: ${totals.exteriorLf} lf exterior perimeter, ${totals.perimeterLf} lf foundation wall, ${totals.interiorSf} sq ft crawlspace${totals.atticSf ? `, ${totals.atticSf} sq ft attic` : ''}.` });
   }
 
   b.push({ kind: 'h', text: 'Your recommended plan' });

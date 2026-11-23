@@ -16,6 +16,10 @@ export type Section = {
   overridePerimeterLf?: number | null;
   overrideAreaSf?: number | null;
   overrideReason?: string | null;
+  /** Counts toward the exterior perimeter (termite treatment, outside drains). Default: included non-attic sections. */
+  exterior?: boolean;
+  /** Feet of this section's wall that touch the house (an attached garage or stoop). Not part of the outside line. */
+  sharedWallLf?: number | null;
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -107,17 +111,32 @@ export function computeSection(s: Section): SectionResult {
 }
 
 export type Totals = {
-  perimeterLf: number; // foundation wall LF (all included non-attic sections)
+  perimeterLf: number; // foundation / crawl space wall LF (included non-attic sections)
   interiorSf: number;  // crawl/basement/slab/other interior sq ft
   atticSf: number;
+  exteriorLf: number;  // outside line of the building, incl. attached garage/porch/stoop the rep counted
 };
 
-/** Totals that feed pricing quantities (qty_source perimeter_lf / interior_sf / attic_sf). */
+/** Whether a section counts toward the exterior perimeter. */
+export function countsExterior(s: Section): boolean {
+  return s.exterior ?? (s.includeInTotals && s.areaType !== 'attic');
+}
+
+/** A section's share of the exterior perimeter: its walls, minus the stretch it shares with the house (on both sides). */
+export function exteriorLf(s: Section): number {
+  if (!countsExterior(s) || s.areaType === 'attic') return 0;
+  const p = computeSection(s).perimeterLf;
+  return round2(Math.max(0, p - 2 * Math.max(0, s.sharedWallLf ?? 0)));
+}
+
+/** Totals that feed pricing quantities (qty_source perimeter_lf / interior_sf / attic_sf / exterior_lf). */
 export function totals(sections: Section[]): Totals {
   let perimeter = 0;
   let interior = 0;
   let attic = 0;
+  let exterior = 0;
   for (const s of sections) {
+    exterior += exteriorLf(s);
     if (!s.includeInTotals) continue;
     const r = computeSection(s);
     if (s.areaType === 'attic') {
@@ -127,7 +146,7 @@ export function totals(sections: Section[]): Totals {
       interior += r.areaSf;
     }
   }
-  return { perimeterLf: round2(perimeter), interiorSf: round2(interior), atticSf: round2(attic) };
+  return { perimeterLf: round2(perimeter), interiorSf: round2(interior), atticSf: round2(attic), exteriorLf: round2(exterior) };
 }
 
 /** Flag for the manager when a rep's override is far from the drawing. */

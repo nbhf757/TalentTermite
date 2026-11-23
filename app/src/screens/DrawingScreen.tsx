@@ -1,6 +1,6 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import {
-  computeSection, needsOverrideReview, totals, vertices,
+  computeSection, countsExterior, exteriorLf, needsOverrideReview, totals, vertices,
   type AreaType, type Section, type Wall,
 } from '../lib/footprint';
 import DragDraw from '../components/DragDraw';
@@ -77,7 +77,7 @@ export default function DrawingScreen({ sections, setSections }: {
     if (active.walls.length && !confirm(`Replace the ${active.walls.length} walls already drawn in "${active.label}"?`)) return;
     const added: Section[] = extras.map((x, i) => ({
       ...newSection(sections.length + 1 + i), label: x.label && x.label !== x.kind ? `${x.kind} (${x.label})` : x.kind,
-      areaType: 'porch', includeInTotals: false, walls: extraToWalls(x),
+      areaType: 'porch', includeInTotals: false, walls: extraToWalls(x), exterior: true, sharedWallLf: x.width_ft,
     }));
     setSections(ss => [...ss.map(s => (s.id === activeId ? { ...s, walls, overridePerimeterLf: null, overrideAreaSf: null } : s)), ...added]);
   };
@@ -107,9 +107,27 @@ export default function DrawingScreen({ sections, setSections }: {
         </label>
         <label className="check">
           <input type="checkbox" checked={active.includeInTotals} onChange={e => update({ includeInTotals: e.target.checked })} />
-          Include in totals
+          Crawl space / interior totals
         </label>
+        {active.areaType !== 'attic' && (
+          <label className="check">
+            <input type="checkbox" checked={countsExterior(active)} onChange={e => update({ exterior: e.target.checked })} />
+            Exterior perimeter
+          </label>
+        )}
+        {active.areaType !== 'attic' && countsExterior(active) && sections[0].id !== activeId && (
+          <label>Wall shared with house (ft)
+            <input inputMode="decimal" style={{ width: 70 }} value={active.sharedWallLf ?? ''}
+              onChange={e => update({ sharedWallLf: numOrNull(e.target.value) })} />
+          </label>
+        )}
       </div>
+      {active.areaType !== 'attic' && (
+        <p className="muted small" style={{ marginTop: 0 }}>
+          This section adds {exteriorLf(active)} lf to the exterior perimeter{active.includeInTotals ? ' and counts toward the crawl space' : ', not to the crawl space'}.
+          {' '}Garages, porches and stoops: check Exterior perimeter only, and enter the wall they share with the house.
+        </p>
+      )}
 
       <SketchImport onUse={applySketch} />
 
@@ -167,7 +185,8 @@ export default function DrawingScreen({ sections, setSections }: {
       )}
 
       <div className="totals">
-        <div><span>Foundation wall</span><strong>{sum.perimeterLf} lf</strong></div>
+        <div><span>Exterior perimeter</span><strong>{sum.exteriorLf} lf</strong></div>
+        <div><span>Crawl / foundation wall</span><strong>{sum.perimeterLf} lf</strong></div>
         <div><span>Interior</span><strong>{sum.interiorSf} sq ft</strong></div>
         <div><span>Attic</span><strong>{sum.atticSf} sq ft</strong></div>
       </div>

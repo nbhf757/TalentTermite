@@ -6,7 +6,7 @@ export type PriceItem = {
   section: 'foundation' | 'moisture' | 'pest' | 'attic' | 'recurring';
   name: string;
   unit: 'each' | 'lf' | 'sf' | 'hour' | 'lump';
-  qty_source: 'perimeter_lf' | 'interior_sf' | 'attic_sf' | 'manual' | null;
+  qty_source: 'perimeter_lf' | 'exterior_lf' | 'interior_sf' | 'attic_sf' | 'manual' | null;
   waste_factor: number;
   unit_price: number;
   min_price: number | null;
@@ -22,6 +22,7 @@ export function defaultQty(item: PriceItem, t: Totals): number {
   const wf = item.waste_factor || 1;
   switch (item.qty_source) {
     case 'perimeter_lf': return r2(t.perimeterLf * wf);
+    case 'exterior_lf': return r2(t.exteriorLf * wf);
     case 'interior_sf': return r2(t.interiorSf * wf);
     case 'attic_sf': return r2(t.atticSf * wf);
     default: return 1;

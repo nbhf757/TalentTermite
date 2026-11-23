@@ -61,7 +61,7 @@ export default function SketchImport({ onUse }: { onUse: (walls: Wall[], extras:
             {reading.extras.map((x, i) => (
               <label key={i} className="check small" style={{ display: 'block' }}>
                 <input type="checkbox" checked={!!keep[i]} onChange={e => setKeep(k => k.map((v, j) => (j === i ? e.target.checked : v)))} />
-                {' '}{x.kind} {x.label && x.label !== x.kind ? `(${x.label})` : ''} {x.width_ft}' × {x.depth_ft}', add as its own section, not in totals
+                {' '}{x.kind} {x.label && x.label !== x.kind ? `(${x.label})` : ''} {x.width_ft}' × {x.depth_ft}', add it (counts toward the exterior perimeter only, not the crawl space)
               </label>
             ))}
           </>)}

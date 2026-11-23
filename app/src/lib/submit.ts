@@ -2,7 +2,7 @@
 // and emails the customer. Signing works offline: the signed proposal waits on the device and is sent
 // as soon as the rep is signed in and online. A retry never creates a second proposal (client_ref).
 import type { Section } from './footprint';
-import { computeSection } from './footprint';
+import { computeSection, countsExterior, exteriorLf } from './footprint';
 import type { Answers } from './inspection';
 import { buildProposalDoc, proposalView, savedLines, type ProposalInput } from './proposalDoc';
 import { supabase } from './supabase';
@@ -38,6 +38,7 @@ export function buildSubmission(i: SubmitInput) {
         calc_perimeter_lf: r.calcPerimeterLf, calc_area_sf: r.calcAreaSf,
         override_perimeter_lf: s.overridePerimeterLf ?? null, override_area_sf: s.overrideAreaSf ?? null,
         override_reason: s.overrideReason ?? null, closure_gap_ft: r.closureGapFt,
+        counts_exterior: countsExterior(s), shared_wall_lf: s.sharedWallLf ?? null, exterior_lf: exteriorLf(s),
       };
     }),
     answers: Object.entries(i.answers).map(([point_key, a]) => ({ point_key, answer: a.value, notes: a.note ?? null })),
