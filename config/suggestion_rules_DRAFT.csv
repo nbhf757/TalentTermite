@@ -1,0 +1,24 @@
+point,answer_condition,suggested_section,suggested_work,quantity_from_drawing,status
+crawl_standing_water,Yes,Moisture,French drain + sump pump,perimeter LF (drain),DRAFT - Nathan to confirm
+crawl_wood_moisture,>= 20%,Moisture,Dehumidifier (Aprilaire),interior SF (sizing),DRAFT - threshold to confirm
+crawl_musty,Yes,Moisture,Dehumidifier + vapor barrier review,interior SF,DRAFT
+crawl_vapor_barrier,Needs Attention,Moisture,Vapor barrier (replace/upgrade),interior SF x waste,DRAFT
+crawl_encapsulated,No,Moisture,Encapsulation (option),interior SF + perimeter LF,DRAFT
+crawl_ventilation,No,Moisture,Vent covers / ventilation fix,each,DRAFT
+crawl_damaged_wood,Yes,Foundation,Joist/beam/sill repair (rep sets count),rep entry,DRAFT
+crawl_foundation_cracks,Yes,Foundation,Foundation crack repair / piers,rep entry,DRAFT
+crawl_fungus,Yes,Foundation,Fungus treatment + moisture control,interior SF,DRAFT
+crawl_rodents,Yes,Pest,Rodent exclusion package,each,DRAFT
+crawl_entry_points,Yes,Pest,Exclusion / seal entry points,each,DRAFT
+crawl_termites,Yes,Pest,Termite treatment package,perimeter LF,DRAFT
+attic_rodents,Yes,Pest,Talent Attic Remediation,attic SF (separate drawing),DRAFT
+attic_insulation_depth,< 13 in,Pest,Pro-Shield insulation to R-49,attic SF,DRAFT
+attic_entry_points,Needs Attention,Pest,Seal attic entry points,each,DRAFT
+attic_termites,Yes,Pest,Termite treatment package,perimeter LF,DRAFT
+int_pests,Yes,Pest,General pest package,n/a,DRAFT
+int_droppings,Yes,Pest,Rodent package,n/a,DRAFT
+int_rodents,Yes,Pest,Rodent package,n/a,DRAFT
+ext_gutters_clear,No,Moisture,Note: gutter cleaning (refer out),n/a,DRAFT
+ext_nearby_water,Yes,Pest,Mosquito service,n/a,DRAFT
+ext_trees_over_roof,Yes,Pest,Note: trim trees (rodent access),n/a,DRAFT
+ext_prior_termite_treatment,Yes - Liquid or Yes - Bait,Pest,Termite renewal / bond review,n/a,DRAFT

@@ -1,0 +1,45 @@
+{
+  "form": "27-Point Home Inspection (\"What Else?\" Initiative)",
+  "source": "27_Point_Inspection.pdf",
+  "header_fields": ["buyer_name","address","city_state_zip","buyer_phone","buyer_email","technician_name","date","temp_f","rainy"],
+  "sections": [
+    {"key":"crawl","title":"Crawlspace / Foundation","points":[
+      {"key":"crawl_encapsulated","label":"Encapsulated","type":"yes_no_na"},
+      {"key":"crawl_ventilation","label":"Proper Ventilation","type":"yes_no_na"},
+      {"key":"crawl_wood_moisture","label":"Wood Moisture Content","type":"percent_or_na"},
+      {"key":"crawl_musty","label":"Musty Smell","type":"yes_no_na"},
+      {"key":"crawl_standing_water","label":"Standing Water","type":"yes_no_na"},
+      {"key":"crawl_vapor_barrier","label":"Vapor Barrier Condition","type":"choice","options":["Good","Needs Attention","N/A"]},
+      {"key":"crawl_damaged_wood","label":"Damaged Wood Members","type":"yes_no_na"},
+      {"key":"crawl_foundation_cracks","label":"Cracks in Foundation","type":"yes_no_na"},
+      {"key":"crawl_fungus","label":"Fungus Present","type":"yes_no_na"},
+      {"key":"crawl_rodents","label":"Evidence of Rodents","type":"yes_no_na"},
+      {"key":"crawl_entry_points","label":"Entry Points","type":"yes_no_na"},
+      {"key":"crawl_termites","label":"Evidence of Termites","type":"yes_no_na"}
+    ]},
+    {"key":"attic","title":"Attic","points":[
+      {"key":"attic_ventilation","label":"Proper Ventilation","type":"yes_no"},
+      {"key":"attic_insulation_depth","label":"Depth of Insulation","type":"inches"},
+      {"key":"attic_rodents","label":"Evidence of Rodents","type":"yes_no"},
+      {"key":"attic_entry_points","label":"Entry Points","type":"choice","options":["Good","Fair","Needs Attention"]},
+      {"key":"attic_termites","label":"Evidence of Termites","type":"yes_no"}
+    ]},
+    {"key":"interior","title":"Interior","points":[
+      {"key":"int_pests","label":"Evidence of Pests","type":"yes_no"},
+      {"key":"int_droppings","label":"Droppings","type":"yes_no"},
+      {"key":"int_rodents","label":"Evidence of Rodents","type":"yes_no"},
+      {"key":"int_entry_points","label":"Entry Points","type":"yes_no"}
+    ]},
+    {"key":"exterior","title":"Exterior","points":[
+      {"key":"ext_trees_over_roof","label":"Trees Over Roof","type":"yes_no"},
+      {"key":"ext_window_screens","label":"Screens on Windows","type":"yes_no"},
+      {"key":"ext_nearby_water","label":"Nearby Water","type":"yes_no"},
+      {"key":"ext_gutters_clear","label":"Gutters Free of Debris","type":"yes_no"},
+      {"key":"ext_brick_cracks","label":"Cracks in Brick","type":"yes_no"},
+      {"key":"ext_prior_termite_treatment","label":"Evidence of Previous Termite Treatment","type":"choice","options":["Yes - Liquid","Yes - Bait","No"]}
+    ]}
+  ],
+  "comments_field": true,
+  "technician_signature": true,
+  "every_point_allows": ["notes","photos","pin_on_drawing"]
+}
