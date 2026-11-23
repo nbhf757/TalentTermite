@@ -116,3 +116,4 @@ button.wide { width: 100%; padding: 12px; }
 .pkg-line select { font-size: 13px; padding: 4px 6px; max-width: 50%; }
 .flag { border-color: var(--warn); background: #fff8ef; }
 .ok { color: #1a7f37; font-weight: 600; }
+.unsigned-save { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e5e7eb; }

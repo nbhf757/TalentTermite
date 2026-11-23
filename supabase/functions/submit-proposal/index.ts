@@ -1,9 +1,10 @@
-// Saves a signed proposal from the rep app, renders the signed PDF, and emails the customer a copy.
+// Saves a proposal from the rep app and renders its PDF. Signed: status 'signed', signatures saved, customer emailed.
+// Unsigned (no signatures sent): status 'sent', PDF marked NOT SIGNED. Saving again with the same client_ref
+// updates an unsigned proposal (e.g. the customer signs later); a signed proposal is never changed.
 // Requires a signed-in user (verify_jwt). Writes with the service role because signatures are server-written only.
-// Safe to retry: the device sends the same client_ref, and an existing proposal is returned as-is.
 // Email: Resend, when the secrets RESEND_API_KEY and EMAIL_FROM are set. Without them the proposal still saves.
 // Request: POST the payload from app/src/lib/submit.ts (buildSubmission).
-// Response: { proposal_id, number, emailed, email_note? }
+// Response: { proposal_id, number, status, emailed, email_note? }
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'npm:pdf-lib@1.17.1';
 
@@ -20,7 +21,7 @@ type Doc = {
   company: { legal: string; address: string; license: string; phone: string; email: string };
 };
 type Payload = {
-  client_ref: string; brand: 'talent_pest' | 'talent_foundation'; signed_at: string;
+  client_ref: string; brand: 'talent_pest' | 'talent_foundation'; signed_at: string | null;
   customer: Record<string, string | null>;
   price_book: { source: string; loaded_at: string | null };
   quote: { subtotal: number; discount_pct: number; discount_amount: number; total: number; discount_status: string; approver: string | null; down_amount: number; down_pct: number };
@@ -28,7 +29,7 @@ type Payload = {
   lines: Record<string, unknown>[]; drawings: Record<string, unknown>[];
   answers: { point_key: string; answer: string; notes: string | null }[];
   comments: string; top_down_ack: boolean; doc: Doc;
-  signatures: { customer: string; rep: string };
+  signatures?: { customer: string; rep: string } | null;
 };
 
 const APPROVAL: Record<string, string> = { none: 'none', ok: 'none', manager_flag: 'manager_flag', needs_approval: 'approved' };
@@ -54,8 +55,8 @@ function wrap(text: string, font: PDFFont, size: number, width: number): string[
   return out;
 }
 
-async function renderPdf(doc: Doc, number: number, sigs: { customer: Uint8Array; rep: Uint8Array },
-  names: { customer: string; rep: string }, signedAt: string) {
+async function renderPdf(doc: Doc, number: number, sigs: { customer: Uint8Array; rep: Uint8Array } | null,
+  names: { customer: string; rep: string }, signedAt: string | null) {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${doc.brand} proposal #${number}`); pdf.setAuthor(doc.company.legal);
   const reg = await pdf.embedFont(StandardFonts.Helvetica), bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -101,20 +102,28 @@ async function renderPdf(doc: Doc, number: number, sigs: { customer: Uint8Array;
     }
   }
 
-  // Signatures
-  ensure(170); y -= 16; para('Accept and sign', 13, bold, accent, 0, 6);
-  const when = new Date(signedAt).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'long', timeStyle: 'short' }) + ' ET';
-  const boxW = (CW - 20) / 2, boxH = 70, top = y;
-  for (const [i, [label, png, name]] of ([['Customer', sigs.customer, names.customer], ['Talent representative', sigs.rep, names.rep]] as const).entries()) {
-    const x = M + i * (boxW + 20);
-    const img = await pdf.embedPng(png); const scale = Math.min(boxW / img.width, boxH / img.height);
-    page.drawImage(img, { x, y: top - boxH, width: img.width * scale, height: img.height * scale });
-    page.drawLine({ start: { x, y: top - boxH - 4 }, end: { x: x + boxW, y: top - boxH - 4 }, thickness: 0.75, color: muted });
-    page.drawText(clean(`${label}: ${name}`), { x, y: top - boxH - 16, size: 9, font: bold, color: ink });
-    page.drawText(clean(`Signed ${when}`), { x, y: top - boxH - 28, size: 8.5, font: reg, color: muted });
+  if (!sigs || !signedAt) {
+    // Unsigned copy for the customer file
+    ensure(90); y -= 16; para('Not signed', 13, bold, rgb(0.7, 0.2, 0.1), 0, 4);
+    para(`This proposal has not been accepted. Prepared by ${names.rep}. To accept, call us at ${doc.company.phone}.`, 10);
+    for (const p of pdf.getPages()) {
+      p.drawText('NOT SIGNED', { x: W - M - bold.widthOfTextAtSize('NOT SIGNED', 9), y: 28, size: 9, font: bold, color: rgb(0.7, 0.2, 0.1) });
+    }
+  } else {
+    // Signatures
+    ensure(170); y -= 16; para('Accept and sign', 13, bold, accent, 0, 6);
+    const when = new Date(signedAt).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'long', timeStyle: 'short' }) + ' ET';
+    const boxW = (CW - 20) / 2, boxH = 70, top = y;
+    for (const [i, [label, png, name]] of ([['Customer', sigs.customer, names.customer], ['Talent representative', sigs.rep, names.rep]] as const).entries()) {
+      const x = M + i * (boxW + 20);
+      const img = await pdf.embedPng(png); const scale = Math.min(boxW / img.width, boxH / img.height);
+      page.drawImage(img, { x, y: top - boxH, width: img.width * scale, height: img.height * scale });
+      page.drawLine({ start: { x, y: top - boxH - 4 }, end: { x: x + boxW, y: top - boxH - 4 }, thickness: 0.75, color: muted });
+      page.drawText(clean(`${label}: ${name}`), { x, y: top - boxH - 16, size: 9, font: bold, color: ink });
+      page.drawText(clean(`Signed ${when}`), { x, y: top - boxH - 28, size: 8.5, font: reg, color: muted });
+    }
+    y = top - boxH - 40;
   }
-  y = top - boxH - 40;
-
   const pages = pdf.getPages();
   pages.forEach((p, i) => p.drawText(clean(`${doc.brand} · Proposal #${number} · Page ${i + 1} of ${pages.length}`),
     { x: M, y: 28, size: 8, font: reg, color: muted }));
@@ -168,12 +177,15 @@ Deno.serve(async req => {
   if (!p.lines?.length) return json({ error: 'The proposal has no work on it.' }, 400);
   if (p.quote.discount_pct > 10) return json({ error: 'Discount is over 10%.' }, 400);
 
-  // Retry of a proposal that already saved
-  const { data: existing } = await db.from('proposals').select('id, number, customer_emailed_at').eq('client_ref', p.client_ref).maybeSingle();
-  if (existing) return json({ proposal_id: existing.id, number: existing.number, emailed: !!existing.customer_emailed_at });
+  const signing = !!(p.signatures?.customer && p.signatures?.rep && p.signed_at);
+
+  // Same client_ref again: a signed proposal is final; an unsigned one is updated in place.
+  const { data: existing } = await db.from('proposals').select('id, number, status, customer_emailed_at').eq('client_ref', p.client_ref).maybeSingle();
+  if (existing?.status === 'signed')
+    return json({ proposal_id: existing.id, number: existing.number, status: 'signed', emailed: !!existing.customer_emailed_at });
 
   try {
-    const sigs = { customer: pngBytes(p.signatures.customer), rep: pngBytes(p.signatures.rep) };
+    const sigs = signing ? { customer: pngBytes(p.signatures!.customer), rep: pngBytes(p.signatures!.rep) } : null;
     const c = p.customer;
 
     // Customer: match on the FieldRoutes id when we have one
@@ -189,29 +201,46 @@ Deno.serve(async req => {
     else customerId = (await db.from('customers').insert({ ...cust, created_by: rep.id }).select('id').single().throwOnError()).data!.id;
 
     const fin = p.payment_method === 'finance_sac' ? 'enerbank_9mo_sac' : p.payment_method === 'finance_5yr' ? 'enerbank_5yr' : null;
-    const { data: prop } = await db.from('proposals').insert({
-      client_ref: p.client_ref, customer_id: customerId, rep_id: rep.id, brand: p.brand, status: 'signed',
+    const now = new Date().toISOString();
+    const row = {
+      client_ref: p.client_ref, customer_id: customerId, brand: p.brand, status: signing ? 'signed' : 'sent',
       subtotal: p.quote.subtotal, discount_pct: p.quote.discount_pct, discount_amount: p.quote.discount_amount, total: p.quote.total,
       discount_approval: APPROVAL[p.quote.discount_status] ?? 'none', discount_approver_name: p.quote.approver,
       payment_method: fin ? 'financing' : (p.payment_method || null), financing_plan: fin,
       down_payment_amount: p.quote.down_amount, down_payment_pct: p.quote.down_pct,
       price_book_version: p.price_book.loaded_at, price_book_source: p.price_book.source,
-      top_down_ack: p.top_down_ack, doc: p.doc, signed_at: p.signed_at,
-    }).select('id, number').single().throwOnError();
-    const id = prop!.id as string, number = prop!.number as number;
+      top_down_ack: p.top_down_ack, doc: p.doc, signed_at: signing ? p.signed_at : null, updated_at: now,
+    };
+    let id: string, number: number;
+    if (existing) {
+      id = existing.id; number = existing.number;
+      await db.from('proposals').update(row).eq('id', id).throwOnError();
+      for (const t of ['proposal_lines', 'drawings', 'inspection_answers', 'inspection_header'])
+        await db.from(t).delete().eq('proposal_id', id).throwOnError();
+    } else {
+      const { data: prop } = await db.from('proposals').insert({ ...row, rep_id: rep.id, sent_at: now }).select('id, number').single().throwOnError();
+      id = prop!.id; number = prop!.number;
+    }
 
     await db.from('proposal_lines').insert(p.lines.map(l => ({ ...l, proposal_id: id }))).throwOnError();
     if (p.drawings.length) await db.from('drawings').insert(p.drawings.map(d => ({ ...d, proposal_id: id }))).throwOnError();
     if (p.answers.length) await db.from('inspection_answers').insert(p.answers.map(a => ({ ...a, proposal_id: id }))).throwOnError();
-    await db.from('inspection_header').insert({ proposal_id: id, technician_id: rep.id, inspected_on: p.signed_at.slice(0, 10), comments: p.comments || null }).throwOnError();
+    await db.from('inspection_header').insert({ proposal_id: id, technician_id: rep.id, inspected_on: now.slice(0, 10), comments: p.comments || null }).throwOnError();
 
-    // PDF and signature images
+    // PDF
     const names = { customer: `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim(), rep: rep.full_name };
-    const pdf = await renderPdf(p.doc, number, sigs, names, p.signed_at);
+    const pdf = await renderPdf(p.doc, number, sigs, names, signing ? p.signed_at : null);
     const hash = await sha256(pdf);
     const dir = `${number}`;
     const up = (path: string, body: Uint8Array, contentType: string) =>
       db.storage.from('proposals').upload(path, body, { contentType, upsert: true }).then(r => { if (r.error) throw r.error; });
+
+    if (!sigs) {
+      await up(`${dir}/unsigned.pdf`, pdf, 'application/pdf');
+      await db.from('proposals').update({ unsigned_pdf_path: `${dir}/unsigned.pdf` }).eq('id', id).throwOnError();
+      return json({ proposal_id: id, number, status: 'sent', emailed: false });
+    }
+
     await up(`${dir}/signed.pdf`, pdf, 'application/pdf');
     await up(`${dir}/sig-customer.png`, sigs.customer, 'image/png');
     await up(`${dir}/sig-rep.png`, sigs.rep, 'image/png');
@@ -233,7 +262,7 @@ Deno.serve(async req => {
       if (emailed) await db.from('proposals').update({ customer_emailed_at: new Date().toISOString() }).eq('id', id);
     } else note = 'No customer email on file, so no copy was emailed.';
 
-    return json({ proposal_id: id, number, emailed, email_note: note });
+    return json({ proposal_id: id, number, status: 'signed', emailed, email_note: note });
   } catch (e) {
     const msg = (e as { message?: string }).message ?? String(e);
     console.error('submit-proposal', msg);

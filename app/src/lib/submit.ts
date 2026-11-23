@@ -7,11 +7,11 @@ import type { Answers } from './inspection';
 import { buildProposalDoc, proposalView, savedLines, type ProposalInput } from './proposalDoc';
 import { supabase } from './supabase';
 
-export type SubmitResult = { proposal_id: string; number: number; emailed: boolean; email_note?: string };
+export type SubmitResult = { proposal_id: string; number: number; status: 'sent' | 'signed'; emailed: boolean; email_note?: string };
 
 export type SubmitInput = ProposalInput & {
   clientRef: string; sections: Section[]; answers: Answers;
-  customerSig: string; repSig: string; signedAt: string;
+  customerSig: string | null; repSig: string | null; signedAt: string | null; // all null = save unsigned
 };
 
 export function buildSubmission(i: SubmitInput) {
@@ -42,8 +42,8 @@ export function buildSubmission(i: SubmitInput) {
     answers: Object.entries(i.answers).map(([point_key, a]) => ({ point_key, answer: a.value, notes: a.note ?? null })),
     comments: i.comments,
     top_down_ack: !!i.work.topDownAck,
-    doc: buildProposalDoc(i, new Date(i.signedAt)),
-    signatures: { customer: i.customerSig, rep: i.repSig },
+    doc: buildProposalDoc(i, i.signedAt ? new Date(i.signedAt) : new Date()),
+    signatures: i.signedAt && i.customerSig && i.repSig ? { customer: i.customerSig, rep: i.repSig } : null,
   };
 }
 

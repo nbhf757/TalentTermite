@@ -15,14 +15,15 @@ export type SaveState =
 export type Signoff = {
   method: PaymentMethod; customerSig: string | null; repSig: string | null; signedAt: string | null;
   clientRef?: string; save?: SaveState;
+  unsigned?: { status: 'sending' } | { status: 'saved'; number: number; at: string } | { status: 'error'; note: string };
 };
 export const emptySignoff = (): Signoff => ({ method: '', customerSig: null, repSig: null, signedAt: null });
 
 const METHODS = Object.entries(METHOD_LABEL) as [Exclude<PaymentMethod, ''>, string][];
 
-export default function ProposalScreen({ brand, customer, book, totals, work, suggestions, comments, signoff, onSignoff, onRetry }: {
+export default function ProposalScreen({ brand, customer, book, totals, work, suggestions, comments, signoff, onSignoff, onRetry, onSaveUnsigned }: {
   brand: Brand; customer: Customer; book: PriceBook; totals: Totals; work: Work; suggestions: Suggestion[];
-  comments: string; signoff: Signoff; onSignoff: (s: Signoff) => void; onRetry: () => void;
+  comments: string; signoff: Signoff; onSignoff: (s: Signoff) => void; onRetry: () => void; onSaveUnsigned: () => void;
 }) {
   const { packaging, packages, quote: q, down, problems, ongoing, hasAprilaire, terms } = proposalView({ book, totals, work });
   const blockers = [...problems];
@@ -117,10 +118,11 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
         {canSign && !signed && (<>
           <SignaturePad label={`Customer: ${customer.first_name} ${customer.last_name}`} value={signoff.customerSig} onChange={v => set({ customerSig: v })} />
           <SignaturePad label="Talent representative" value={signoff.repSig} onChange={v => set({ repSig: v })} />
-          <button className="primary wide" disabled={!signoff.customerSig || !signoff.repSig} onClick={() => set({ signedAt: new Date().toISOString(), clientRef: crypto.randomUUID(), save: { status: 'waiting' } })}>
+          <button className="primary wide" disabled={!signoff.customerSig || !signoff.repSig} onClick={() => set({ signedAt: new Date().toISOString(), clientRef: signoff.clientRef ?? crypto.randomUUID(), save: { status: 'waiting' } })}>
             Accept and sign
           </button>
         </>)}
+        {!signed && <UnsignedSave state={signoff.unsigned} disabled={problems.length > 0 || !customerReady(customer)} onSave={onSaveUnsigned} />}
         {signed && (<>
           <p><strong>Signed {new Date(signoff.signedAt!).toLocaleString()}.</strong> A copy will be emailed to you, and our office will contact you to schedule.</p>
           <SaveStatus save={signoff.save} email={customer.email} onRetry={onRetry} />
@@ -145,6 +147,19 @@ function SaveStatus({ save, email, onRetry }: { save?: SaveState; email: string;
     <div className="small warn">
       Not sent to the office yet{save.note ? `: ${save.note}` : '.'} It is kept on this device and sends automatically.
       {' '}<button className="link" onClick={onRetry}>Try now</button>
+    </div>
+  );
+}
+
+/** Customer not ready to sign: save to the office as Sent, with a PDF marked Not signed. */
+function UnsignedSave({ state, disabled, onSave }: { state: Signoff['unsigned']; disabled: boolean; onSave: () => void }) {
+  return (
+    <div className="unsigned-save">
+      <button className="wide" disabled={disabled || state?.status === 'sending'} onClick={onSave}>
+        {state?.status === 'sending' ? 'Saving…' : state?.status === 'saved' ? 'Save changes (not signed yet)' : 'Save, not signed yet'}
+      </button>
+      {state?.status === 'saved' && <p className="small ok">Saved as proposal #{state.number} ({new Date(state.at).toLocaleTimeString()}). The customer can still sign here later.</p>}
+      {state?.status === 'error' && <p className="small warn">Not saved: {state.note}</p>}
     </div>
   );
 }

@@ -43,9 +43,9 @@ export default function App() {
   }, [step, sections, answers, comments, work, brand, customer, signoff]);
 
   const startNew = () => {
-    const unsent = signoff.signedAt && signoff.save?.status !== 'saved';
+    const unsent = (signoff.signedAt && signoff.save?.status !== 'saved') || (!signoff.signedAt && signoff.unsigned?.status !== 'saved' && work.lines.length > 0);
     if (!window.confirm(unsent
-      ? 'This signed proposal has NOT reached the office yet. Clearing it loses it. Start a new proposal anyway?'
+      ? 'This proposal has NOT been saved to the office. Clearing it loses it. Start a new proposal anyway? (Use "Save, not signed yet" on the Proposal step to keep it.)'
       : 'Start a new proposal? The current one will be cleared from this device.')) return;
     const d = freshDraft(); clearDraft();
     setStep(d.step); setSections(d.sections); setAnswers(d.answers); setComments(d.comments);
@@ -74,6 +74,20 @@ export default function App() {
     } catch (e) {
       setSignoff({ ...so, save: { status: 'waiting', note: (e as Error).message } });
     } finally { sending.current = false; }
+  }, [signoff, brand, customer, book, sum, work, suggestions, comments, sections, answers]);
+
+  const saveUnsigned = useCallback(async () => {
+    const so = { ...signoff, clientRef: signoff.clientRef ?? crypto.randomUUID() };
+    setSignoff({ ...so, unsigned: { status: 'sending' } });
+    try {
+      const r = await submitProposal(buildSubmission({
+        brand, customer, book, totals: sum, work, suggestions, comments, method: so.method,
+        clientRef: so.clientRef, sections, answers, customerSig: null, repSig: null, signedAt: null,
+      }));
+      setSignoff({ ...so, unsigned: { status: 'saved', number: r.number, at: new Date().toISOString() } });
+    } catch (e) {
+      setSignoff({ ...so, unsigned: { status: 'error', note: (e as Error).message } });
+    }
   }, [signoff, brand, customer, book, sum, work, suggestions, comments, sections, answers]);
 
   const waiting = !!signoff.signedAt && signoff.save?.status !== 'saved' && signoff.save?.status !== 'sending';
@@ -120,7 +134,7 @@ export default function App() {
         )}
         {step === 'Proposal' && (
           <ProposalScreen brand={brand} customer={customer} book={book} totals={sum} work={work} suggestions={suggestions}
-            comments={comments} signoff={signoff} onSignoff={setSignoff} onRetry={trySend} />
+            comments={comments} signoff={signoff} onSignoff={setSignoff} onRetry={trySend} onSaveUnsigned={saveUnsigned} />
         )}
       </main>
     </div>
