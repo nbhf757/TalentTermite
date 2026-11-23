@@ -37,9 +37,9 @@ const APPROVAL: Record<string, string> = { none: 'none', ok: 'none', manager_fla
 // ---------- PDF ----------
 // Standard fonts only cover WinAnsi; swap the few characters the app uses that it can't encode.
 const clean = (s: string) => s
-  .replace(/[−‐‑]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
-  .replace(/…/g, '...').replace(/≥/g, '>=').replace(/≤/g, '<=')
-  .replace(/[^\x20-\x7E -ÿ–—•€™]/g, '');
+  .replace(/[\u2212\u2010\u2011]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"')
+  .replace(/\u2026/g, '...').replace(/\u2265/g, '>=').replace(/\u2264/g, '<=')
+  .replace(/[^\x20-\x7E\u00a0-\u00ff\u2013\u2014\u2022\u20ac\u2122]/g, '');
 
 function wrap(text: string, font: PDFFont, size: number, width: number): string[] {
   const out: string[] = [];
@@ -78,8 +78,8 @@ async function renderPdf(doc: Doc, number: number, sigs: { customer: Uint8Array;
     const f = i === 0 ? bold : reg, s = clean(l).slice(0, 70);
     page.drawText(s, { x: W - M - f.widthOfTextAtSize(s, 10), y: ry, size: 10, font: f, color: i ? muted : ink }); ry -= 13;
   }
-  y -= 14; text(`${doc.company.legal} · ${doc.company.address}`, M, 9, reg, muted);
-  y -= 12; text(`${doc.company.license} · ${doc.company.phone} · ${doc.company.email}`, M, 9, reg, muted);
+  y -= 14; text(`${doc.company.legal} \u00b7 ${doc.company.address}`, M, 9, reg, muted);
+  y -= 12; text(`${doc.company.license} \u00b7 ${doc.company.phone} \u00b7 ${doc.company.email}`, M, 9, reg, muted);
   y = Math.min(y, ry) - 14;
   page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 1, color: accent }); y -= 8;
 
@@ -91,7 +91,7 @@ async function renderPdf(doc: Doc, number: number, sigs: { customer: Uint8Array;
       case 'small': para(b.text, 8.5, reg, muted); break;
       case 'li': {
         const lines = wrap(b.text, reg, 10, CW - 14);
-        lines.forEach((l, i) => { ensure(13); y -= 13; if (i === 0) text('•', M + 2, 10); text(l, M + 14, 10); });
+        lines.forEach((l, i) => { ensure(13); y -= 13; if (i === 0) text('\u2022', M + 2, 10); text(l, M + 14, 10); });
         y -= 3; break;
       }
       case 'row': {
@@ -125,7 +125,7 @@ async function renderPdf(doc: Doc, number: number, sigs: { customer: Uint8Array;
     y = top - boxH - 40;
   }
   const pages = pdf.getPages();
-  pages.forEach((p, i) => p.drawText(clean(`${doc.brand} · Proposal #${number} · Page ${i + 1} of ${pages.length}`),
+  pages.forEach((p, i) => p.drawText(clean(`${doc.brand} \u00b7 Proposal #${number} \u00b7 Page ${i + 1} of ${pages.length}`),
     { x: M, y: 28, size: 8, font: reg, color: muted }));
   return await pdf.save();
 }
@@ -156,6 +156,99 @@ async function emailCustomer(to: string, firstName: string, brand: string, phone
   });
   const body = await r.text();
   return r.ok ? { ok: true, note: undefined, response: body } : { ok: false, note: `Email failed (${r.status}). The office has the signed PDF.`, response: body.slice(0, 500) };
+}
+
+// ---------- FieldRoutes write-back ----------
+// Keys live only in Supabase secrets FR_SUBDOMAIN, FR_AUTH_KEY, FR_AUTH_TOKEN. Every call is logged to fr_sync_log.
+type Db = ReturnType<typeof createClient>;
+const frBase = () => { const s = Deno.env.get('FR_SUBDOMAIN'); return s ? `https://${s}.fieldroutes.com/api` : null; };
+const frAuth = () => ({ authenticationKey: Deno.env.get('FR_AUTH_KEY') ?? '', authenticationToken: Deno.env.get('FR_AUTH_TOKEN') ?? '' });
+
+async function frCall(db: Db, proposalId: string, action: string, path: string, body: FormData | URLSearchParams, logParams: Record<string, unknown>) {
+  const r = await fetch(`${frBase()}/${path}`, { method: 'POST', body });
+  const text = await r.text();
+  let data: Record<string, unknown> = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text.slice(0, 300) }; }
+  const ok = r.ok && data.success !== false;
+  const { params: _p, tokenUsage: _t, ...resp } = data; // never log echoed auth params
+  await db.from('fr_sync_log').insert({ proposal_id: proposalId, action, request: logParams, response: { status: r.status, ...resp }, ok });
+  if (!ok) throw new Error(`FieldRoutes ${action} failed (${r.status}): ${String(data.errorMessage ?? data.message ?? text).slice(0, 200)}`);
+  return data;
+}
+
+async function frUploadPdf(db: Db, proposalId: string, frCustomerId: string, pdf: Uint8Array, filename: string, description: string, showCustomer: boolean) {
+  const fd = new FormData();
+  const a = frAuth();
+  fd.set('customerID', frCustomerId); fd.set('description', description);
+  fd.set('showCustomer', showCustomer ? '1' : '0'); fd.set('showTech', '0');
+  fd.set('uploadFile', new Blob([pdf], { type: 'application/pdf' }), filename);
+  fd.set('authenticationKey', a.authenticationKey); fd.set('authenticationToken', a.authenticationToken);
+  const d = await frCall(db, proposalId, 'document_upload', 'document/create', fd, { customerID: frCustomerId, description, filename, bytes: pdf.length });
+  return String(d.result ?? '');
+}
+
+async function frEmployeeId(db: Db, proposalId: string, fname: string, lname: string) {
+  const d = await frCall(db, proposalId, 'employee_search', 'employee/search',
+    new URLSearchParams({ fname, lname, active: '1', includeData: '1', ...frAuth() }), { fname, lname });
+  const ids = (d.employeeIDs ?? []) as (string | number)[];
+  const rows = (d.employees ?? []) as { employeeID?: string | number; fname?: string; lname?: string }[];
+  const lc = (x?: string) => (x ?? '').trim().toLowerCase();
+  const exact = rows.find(e => lc(e.fname) === lc(fname) && lc(e.lname) === lc(lname))
+    ?? (rows.filter(e => lc(e.lname) === lc(lname)).length === 1 ? rows.find(e => lc(e.lname) === lc(lname)) : undefined);
+  return String(exact?.employeeID ?? (ids.length === 1 ? ids[0] : '')) || null;
+}
+
+async function frSoldTasks(db: Db, proposalId: string, frCustomerId: string, text: string) {
+  const { data: setting } = await db.from('app_settings').select('value').eq('key', 'sold_task').maybeSingle();
+  const cfg = (setting?.value ?? {}) as { mode?: string; category?: number; due_days?: number; people?: { fname: string; lname: string }[] };
+  const people = (cfg.people ?? []).slice(0, cfg.mode === 'first' ? 1 : undefined);
+  const due = new Date(Date.now() + (cfg.due_days ?? 1) * 86400000).toISOString().slice(0, 10);
+  const ids: string[] = [], problems: string[] = [];
+  for (const [i, person] of people.entries()) {
+    const type = cfg.mode === 'lead_alerts' && i > 0 ? '1' : '0'; // 0 = task, 1 = alert
+    try {
+      const emp = await frEmployeeId(db, proposalId, person.fname, person.lname);
+      if (!emp) { problems.push(`${person.fname} ${person.lname} not found in FieldRoutes`); continue; }
+      const d = await frCall(db, proposalId, 'task_create', 'task/create', new URLSearchParams({
+        type, customerID: frCustomerId, category: String(cfg.category ?? 2), assignedTo: emp,
+        dueDate: due, task: text, status: '0', ...frAuth(),
+      }), { type, customerID: frCustomerId, assignedTo: emp, category: cfg.category ?? 2, dueDate: due, task: text });
+      ids.push(String(d.result ?? ''));
+    } catch (e) { problems.push((e as Error).message); }
+  }
+  return { ids, problems };
+}
+
+/** Uploads the PDF to the customer's FieldRoutes record; on a signed job also creates the scheduling task(s).
+ *  Never fails the save: problems are returned as a note and logged. */
+async function writeBack(db: Db, id: string, number: number, frCustomerId: string | null, pdf: Uint8Array, signed: boolean, p: Payload, repName: string) {
+  if (!frCustomerId) return { note: 'Customer is not in FieldRoutes yet, so nothing was sent there. Pick the customer from the FieldRoutes search to link them.' };
+  if (!frBase()) return { note: 'FieldRoutes is not connected.' };
+  const out: { document_id?: string; task_ids?: string[]; note?: string } = {};
+  const notes: string[] = [];
+  const { data: setting } = await db.from('app_settings').select('value').eq('key', 'sold_task').maybeSingle();
+  const cfg = (setting?.value ?? {}) as { upload_unsigned?: boolean; show_customer_signed?: boolean };
+  if (!signed) {
+    if (cfg.upload_unsigned === false) return { note: 'Unsigned proposals are not sent to FieldRoutes (setting).' };
+    const { data: prev } = await db.from('proposals').select('fr_document_id').eq('id', id).maybeSingle();
+    if (prev?.fr_document_id) return { document_id: prev.fr_document_id, note: 'The first unsigned copy is already in FieldRoutes; the signed copy will be added when it is signed.' };
+  }
+  try {
+    const desc = signed ? `Signed proposal #${number} (${p.doc.brand})` : `Proposal #${number} - NOT SIGNED (${p.doc.brand})`;
+    out.document_id = await frUploadPdf(db, id, frCustomerId, pdf, `proposal-${number}${signed ? '-signed' : ''}.pdf`, desc, signed && !!cfg.show_customer_signed);
+    await db.from('proposals').update({ fr_document_id: out.document_id }).eq('id', id);
+  } catch (e) { notes.push(`PDF not uploaded to FieldRoutes: ${(e as Error).message}`); }
+  if (signed) {
+    const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+    const pay = p.payment_method.startsWith('finance') ? 'EnerBank financing - approval needed before scheduling' : (p.payment_method || 'not chosen');
+    const text = `SOLD - schedule proposal #${number} (${p.doc.brand}). Total ${money(p.quote.total)}` +
+      (p.quote.down_amount > 0 ? `, ${money(p.quote.down_amount)} down` : '') + `. Payment: ${pay}. Rep: ${repName}. Signed PDF is in Documents.`;
+    const t = await frSoldTasks(db, id, frCustomerId, text);
+    out.task_ids = t.ids; notes.push(...t.problems);
+    if (t.ids.length) await db.from('proposals').update({ fr_task_ids: t.ids }).eq('id', id);
+  }
+  if (notes.length) out.note = notes.join(' ');
+  return out;
 }
 
 // ---------- handler ----------
@@ -238,7 +331,8 @@ Deno.serve(async req => {
     if (!sigs) {
       await up(`${dir}/unsigned.pdf`, pdf, 'application/pdf');
       await db.from('proposals').update({ unsigned_pdf_path: `${dir}/unsigned.pdf` }).eq('id', id).throwOnError();
-      return json({ proposal_id: id, number, status: 'sent', emailed: false });
+      const fr = await writeBack(db, id, number, cust.fr_customer_id, pdf, false, p, names.rep);
+      return json({ proposal_id: id, number, status: 'sent', emailed: false, fr });
     }
 
     await up(`${dir}/signed.pdf`, pdf, 'application/pdf');
@@ -262,7 +356,8 @@ Deno.serve(async req => {
       if (emailed) await db.from('proposals').update({ customer_emailed_at: new Date().toISOString() }).eq('id', id);
     } else note = 'No customer email on file, so no copy was emailed.';
 
-    return json({ proposal_id: id, number, status: 'signed', emailed, email_note: note });
+    const fr = await writeBack(db, id, number, cust.fr_customer_id, pdf, true, p, names.rep);
+    return json({ proposal_id: id, number, status: 'signed', emailed, email_note: note, fr });
   } catch (e) {
     const msg = (e as { message?: string }).message ?? String(e);
     console.error('submit-proposal', msg);

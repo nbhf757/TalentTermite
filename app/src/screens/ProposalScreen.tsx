@@ -11,11 +11,11 @@ export type { PaymentMethod };
 export type SaveState =
   | { status: 'waiting'; note?: string }                        // signed, not on the server yet
   | { status: 'sending' }
-  | { status: 'saved'; number: number; emailed: boolean; emailNote?: string };
+  | { status: 'saved'; number: number; emailed: boolean; emailNote?: string; frNote?: string; frTasks?: number; frDoc?: boolean };
 export type Signoff = {
   method: PaymentMethod; customerSig: string | null; repSig: string | null; signedAt: string | null;
   clientRef?: string; save?: SaveState;
-  unsigned?: { status: 'sending' } | { status: 'saved'; number: number; at: string } | { status: 'error'; note: string };
+  unsigned?: { status: 'sending' } | { status: 'saved'; number: number; at: string; frNote?: string; frDoc?: boolean } | { status: 'error'; note: string };
 };
 export const emptySignoff = (): Signoff => ({ method: '', customerSig: null, repSig: null, signedAt: null });
 
@@ -141,6 +141,9 @@ function SaveStatus({ save, email, onRetry }: { save?: SaveState; email: string;
     <p className="small ok">
       Saved as proposal #{save.number}.{' '}
       {save.emailed ? `PDF emailed to ${email}.` : save.emailNote ?? 'PDF saved; no customer email was sent.'}
+      {save.frDoc && ' PDF added to the customer in FieldRoutes.'}
+      {!!save.frTasks && ` Scheduling task sent to the office (${save.frTasks}).`}
+      {save.frNote && <span className="warn"> {save.frNote}</span>}
     </p>
   );
   return (
@@ -158,7 +161,9 @@ function UnsignedSave({ state, disabled, onSave }: { state: Signoff['unsigned'];
       <button className="wide" disabled={disabled || state?.status === 'sending'} onClick={onSave}>
         {state?.status === 'sending' ? 'Saving…' : state?.status === 'saved' ? 'Save changes (not signed yet)' : 'Save, not signed yet'}
       </button>
-      {state?.status === 'saved' && <p className="small ok">Saved as proposal #{state.number} ({new Date(state.at).toLocaleTimeString()}). The customer can still sign here later.</p>}
+      {state?.status === 'saved' && <p className="small ok">Saved as proposal #{state.number} ({new Date(state.at).toLocaleTimeString()}).
+        {state.frDoc && ' Copy added to the customer in FieldRoutes.'} The customer can still sign here later.
+        {state.frNote && <span className="warn"> {state.frNote}</span>}</p>}
       {state?.status === 'error' && <p className="small warn">Not saved: {state.note}</p>}
     </div>
   );

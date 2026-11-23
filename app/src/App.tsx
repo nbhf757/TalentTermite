@@ -78,7 +78,7 @@ export default function App() {
         clientRef: so.clientRef, sections, answers, customerSig: so.customerSig, repSig: so.repSig, signedAt: so.signedAt,
       });
       const r = await submitProposal(payload);
-      setSignoff({ ...so, save: { status: 'saved', number: r.number, emailed: r.emailed, emailNote: r.email_note } });
+      setSignoff({ ...so, save: { status: 'saved', number: r.number, emailed: r.emailed, emailNote: r.email_note, frNote: r.fr?.note, frTasks: r.fr?.task_ids?.length, frDoc: !!r.fr?.document_id } });
     } catch (e) {
       setSignoff({ ...so, save: { status: 'waiting', note: (e as Error).message } });
     } finally { sending.current = false; }
@@ -92,7 +92,7 @@ export default function App() {
         brand, customer, book, totals: sum, work, suggestions, comments, method: so.method,
         clientRef: so.clientRef, sections, answers, customerSig: null, repSig: null, signedAt: null,
       }));
-      setSignoff({ ...so, unsigned: { status: 'saved', number: r.number, at: new Date().toISOString() } });
+      setSignoff({ ...so, unsigned: { status: 'saved', number: r.number, at: new Date().toISOString(), frNote: r.fr?.note, frDoc: !!r.fr?.document_id } });
     } catch (e) {
       setSignoff({ ...so, unsigned: { status: 'error', note: (e as Error).message } });
     }

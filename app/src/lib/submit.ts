@@ -7,7 +7,8 @@ import type { Answers } from './inspection';
 import { buildProposalDoc, proposalView, savedLines, type ProposalInput } from './proposalDoc';
 import { supabase } from './supabase';
 
-export type SubmitResult = { proposal_id: string; number: number; status: 'sent' | 'signed'; emailed: boolean; email_note?: string };
+export type SubmitResult = { proposal_id: string; number: number; status: 'sent' | 'signed'; emailed: boolean; email_note?: string;
+  fr?: { document_id?: string; task_ids?: string[]; note?: string } };
 
 export type SubmitInput = ProposalInput & {
   clientRef: string; sections: Section[]; answers: Answers;
