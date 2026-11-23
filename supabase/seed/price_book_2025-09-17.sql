@@ -1,6 +1,6 @@
 -- Talent Pest Control Pricing (9/17/2025), loaded from TALENT PRICING UPDATED_Sept.csv
 -- Re-runnable: clears rows from this source first.
-delete from price_items where source = 'pricing_sheet_2025-09-17';
+-- (first load: table was empty)
 
 insert into price_items (section, name, unit, qty_source, unit_price, min_price, initial_price, recurring_price, recurring_interval, description, rep_notes, sort_order) values
 -- Stand-alone treatments
