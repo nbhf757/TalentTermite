@@ -122,3 +122,11 @@ button.wide { width: 100%; padding: 12px; }
 .price-name { margin-bottom: 6px; }
 .price-row textarea { width: 100%; box-sizing: border-box; font: inherit; }
 .save-bar { position: sticky; bottom: 0; background: #fff; border-top: 1px solid var(--line); padding: 10px 0; display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
+.dragdraw { margin-bottom: 8px; }
+.dd-canvas { width: 100%; aspect-ratio: 340 / 300; background: #fff; border: 1px solid var(--line); border-radius: 10px; touch-action: none; user-select: none; }
+.dd-grid { stroke: #e5e7eb; stroke-width: 0.15; }
+.dd-preview { stroke: #2563eb; stroke-dasharray: 1 0.6; }
+.dd-preview-label { fill: #2563eb; font-weight: 700; }
+.dd-end { fill: #2563eb; }
+.dd-sel { stroke: #f59e0b !important; }
+.dd-edit { background: #fffbeb; padding: 8px; border-radius: 8px; }

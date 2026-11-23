@@ -3,6 +3,7 @@ import {
   computeSection, needsOverrideReview, totals, vertices,
   type AreaType, type Section, type Wall,
 } from '../lib/footprint';
+import DragDraw from '../components/DragDraw';
 
 const DIRS: { label: string; deg: number }[] = [
   { label: '→', deg: 0 }, { label: '↓', deg: 90 }, { label: '←', deg: 180 }, { label: '↑', deg: 270 },
@@ -49,6 +50,10 @@ export default function DrawingScreen({ sections, setSections }: {
   const [activeId, setActiveId] = useState(sections[0].id);
   const [len, setLen] = useState('');
   const [dir, setDir] = useState(0);
+  const [mode, setModeState] = useState<'pad' | 'drag'>(() => {
+    try { return localStorage.getItem('talent.drawMode') === 'drag' ? 'drag' : 'pad'; } catch { return 'pad'; }
+  });
+  const setMode = (m: 'pad' | 'drag') => { setModeState(m); try { localStorage.setItem('talent.drawMode', m); } catch { /* ignore */ } };
 
   const active = sections.find(s => s.id === activeId)!;
   const result = useMemo(() => computeSection(active), [active]);
@@ -95,6 +100,12 @@ export default function DrawingScreen({ sections, setSections }: {
         </label>
       </div>
 
+      <div className="chips" style={{ marginBottom: 8 }}>
+        <button className={mode === 'pad' ? 'opt active' : 'opt'} onClick={() => setMode('pad')}>Arrow pad</button>
+        <button className={mode === 'drag' ? 'opt active' : 'opt'} onClick={() => setMode('drag')}>Drag to draw</button>
+      </div>
+
+      {mode === 'drag' ? <DragDraw walls={active.walls} onChange={walls => update({ walls })} /> : (<>
       <FootprintSvg walls={active.walls} />
 
       <div className="wall-entry">
@@ -108,6 +119,7 @@ export default function DrawingScreen({ sections, setSections }: {
         <button className="primary" onClick={addWall}>Add wall</button>
         <button onClick={() => update({ walls: active.walls.slice(0, -1) })} disabled={!active.walls.length}>Undo</button>
       </div>
+      </>)}
 
       {active.walls.length > 2 && !result.isClosed && (
         <p className="warn">The shape is {result.closureGapFt} ft from closing. Check a measurement.</p>

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ALL_POINTS, isAnswered, progress, SECTIONS } from './inspection';
 
 describe('27-point inspection', () => {
-  it('has 27 points in 4 sections', () => {
-    expect(ALL_POINTS).toHaveLength(27);
+  it('has the 27 form points plus insulation type, in 4 sections', () => {
+    expect(ALL_POINTS).toHaveLength(28);
     expect(SECTIONS.map(s => s.points.length)).toEqual([12, 5, 4, 6]);
   });
 
