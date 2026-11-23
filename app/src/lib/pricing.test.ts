@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultQty, discountStatus, downPayment, lineTotal, quote, type PriceItem } from './pricing';
+import { defaultQty, discountStatus, downPayment, lineTotal, quote, recurringSummary, type PriceItem } from './pricing';
 
 const item = (p: Partial<PriceItem>): PriceItem => ({
   id: 'x', section: 'moisture', name: 'x', unit: 'sf', qty_source: 'manual',
@@ -47,5 +47,16 @@ describe('pricing', () => {
   it('down payment: dollars or percent, and checks the minimum', () => {
     expect(downPayment(8000, { pct: 25 })).toEqual({ amount: 2000, pct: 25, balance: 6000, belowRequired: false });
     expect(downPayment(8000, { amount: 1000 }, 2000)).toEqual({ amount: 1000, pct: 12.5, balance: 7000, belowRequired: true });
+  });
+});
+
+describe('recurringSummary', () => {
+  it('groups ongoing charges by interval', () => {
+    expect(recurringSummary([
+      { recurring_price: 99, recurring_interval: 'month' },
+      { recurring_price: 30, recurring_interval: 'month' },
+      { recurring_price: 175, recurring_interval: 'year' },
+      { recurring_price: null, recurring_interval: null },
+    ])).toEqual({ month: 129, year: 175 });
   });
 });

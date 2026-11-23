@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import {
   computeSection, needsOverrideReview, totals, vertices,
   type AreaType, type Section, type Wall,
@@ -9,7 +9,7 @@ const DIRS: { label: string; deg: number }[] = [
 ];
 const AREA_TYPES: AreaType[] = ['crawlspace', 'basement', 'slab', 'attic', 'porch', 'other'];
 
-const newSection = (n: number): Section => ({
+export const newSection = (n: number): Section => ({
   id: crypto.randomUUID(), label: n === 1 ? 'Main house' : `Section ${n}`,
   areaType: 'crawlspace', includeInTotals: true, walls: [],
 });
@@ -43,8 +43,9 @@ function FootprintSvg({ walls }: { walls: Wall[] }) {
   );
 }
 
-export default function DrawingScreen() {
-  const [sections, setSections] = useState<Section[]>([newSection(1)]);
+export default function DrawingScreen({ sections, setSections }: {
+  sections: Section[]; setSections: Dispatch<SetStateAction<Section[]>>;
+}) {
   const [activeId, setActiveId] = useState(sections[0].id);
   const [len, setLen] = useState('');
   const [dir, setDir] = useState(0);

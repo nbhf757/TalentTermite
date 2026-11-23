@@ -86,3 +86,13 @@ export function downPayment(total: number, input: { amount?: number; pct?: numbe
   const pct = total > 0 ? r2(amount / total * 100) : 0;
   return { amount, pct, balance: r2(total - amount), belowRequired: amount < requiredDown };
 }
+
+/** Ongoing charges after the job, grouped by billing interval, e.g. { month: 99, year: 175 }. */
+export function recurringSummary(items: { recurring_price: number | null; recurring_interval: string | null }[]) {
+  const out: Record<string, number> = {};
+  for (const i of items) {
+    if (i.recurring_price == null || !i.recurring_interval) continue;
+    out[i.recurring_interval] = r2((out[i.recurring_interval] ?? 0) + i.recurring_price);
+  }
+  return out;
+}
