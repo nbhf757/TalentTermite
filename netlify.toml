@@ -1,0 +1,14 @@
+# Netlify builds the rep app from app/.
+[build]
+  base = "app"
+  command = "npm ci && npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Single-page app: send every path to index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
