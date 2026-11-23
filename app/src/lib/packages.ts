@@ -46,16 +46,16 @@ export type Package = {
 const fmtQty = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 1 });
 const UNIT: Record<string, string> = { sf: 'sq ft', lf: 'linear ft', hour: 'hours' };
 
-/** One scope bullet per line, written for the customer (no prices). */
+/** One scope bullet per line, written for the customer (no prices). Uses the item's scope description when it has one. */
 export function scopeText(l: PkgLine): string {
   const { item, qty } = l;
-  let s = item.name;
+  let q = '';
   if (item.section !== 'recurring') {
-    if (item.unit === 'sf' || item.unit === 'lf' || item.unit === 'hour') s += ` (${fmtQty(qty)} ${UNIT[item.unit]})`;
-    else if (item.unit === 'each' && qty !== 1) s += ` (${fmtQty(qty)})`;
+    if (item.unit === 'sf' || item.unit === 'lf' || item.unit === 'hour') q = `${fmtQty(qty)} ${UNIT[item.unit]}`;
+    else if (item.unit === 'each' && qty !== 1) q = `qty ${fmtQty(qty)}`;
   }
-  if (item.description) s += `: ${item.description}`;
-  return s;
+  if (item.description) return q ? item.description.replace(/\.?$/, ` (${q}).`) : item.description;
+  return item.name + (q ? ` (${q})` : '');
 }
 
 export function buildPackages(lines: PkgLine[], p: Packaging): Package[] {

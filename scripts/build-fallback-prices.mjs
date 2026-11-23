@@ -31,6 +31,9 @@ const items = sql.split('\n')
     return { id: 'fallback:' + o.name, waste_factor: 1, ...o };
   });
 
+const desc = JSON.parse(readFileSync(new URL('../config/price_descriptions.json', import.meta.url), 'utf8')).descriptions;
+for (const i of items) if (desc[i.name]) i.description = desc[i.name];
+
 mkdirSync(new URL('../app/src/data/', import.meta.url), { recursive: true });
 writeFileSync(new URL('../app/src/data/fallback_prices.json', import.meta.url),
   JSON.stringify({ source: 'pricing_sheet_2025-09-17', items }, null, 1) + '\n');

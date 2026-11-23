@@ -78,7 +78,7 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
             <ul className="pkg-scope">
               {p.lines.map((l, i) => (
                 <li key={l.key}>{p.scope[i]}
-                  {l.item.recurring_price != null && <span className="muted"> ({l.item.initial_price != null ? `${$(l.item.initial_price)} to start, then ` : ''}{$(l.item.recurring_price)} {INTERVAL[l.item.recurring_interval ?? ''] ?? ''}{l.item.recurring_interval === 'month' && /^Talent /.test(l.item.name) ? ', quarterly service with unlimited call-backs' : ''})</span>}
+                  {l.item.recurring_price != null && <span className="muted"> ({l.item.initial_price != null ? `${$(l.item.initial_price)} to start, then ` : ''}{$(l.item.recurring_price)} {INTERVAL[l.item.recurring_interval ?? ''] ?? ''})</span>}
                 </li>
               ))}
             </ul>

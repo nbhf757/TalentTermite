@@ -13,7 +13,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Trench and treat the soil around the full foundation perimeter with Termidor HE, creating a continuous treated zone that eliminates termites that pass through it.",
    "rep_notes": null,
    "sort_order": 10
   },
@@ -29,7 +29,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Treat the soil under the planned addition or slab before it is poured, so new construction starts out protected against termites.",
    "rep_notes": null,
    "sort_order": 20
   },
@@ -45,7 +45,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Treat exposed framing in the crawl space with a borate wood treatment to kill and prevent wood-decay fungus and wood-boring beetles.",
    "rep_notes": "Min $375 for spot treat",
    "sort_order": 30
   },
@@ -61,7 +61,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Fog the crawl space with a disinfectant to kill mold, mildew, and odor-causing bacteria (crawl spaces under 1,500 sq ft).",
    "rep_notes": null,
    "sort_order": 40
   },
@@ -77,7 +77,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Fog the crawl space with a disinfectant to kill mold, mildew, and odor-causing bacteria (crawl spaces over 1,500 sq ft).",
    "rep_notes": null,
    "sort_order": 41
   },
@@ -93,7 +93,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": "Remove wood mulch, weed barrier, granular treatment, and new install",
+   "description": "Remove existing wood mulch from around the foundation, install weed barrier with a granular treatment, and replace with rubber mulch that will not feed termites.",
    "rep_notes": null,
    "sort_order": 50
   },
@@ -109,7 +109,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install a 10 mil vapor barrier over the crawl space floor to block ground moisture.",
    "rep_notes": null,
    "sort_order": 100
   },
@@ -125,7 +125,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install a 10 mil vapor barrier over the crawl space floor with all seams taped, to block ground moisture.",
    "rep_notes": null,
    "sort_order": 101
   },
@@ -141,7 +141,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install a heavy-duty 12 mil reinforced woven vapor barrier over the crawl space floor to block ground moisture.",
    "rep_notes": null,
    "sort_order": 102
   },
@@ -157,7 +157,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install a heavy-duty 12 mil reinforced woven vapor barrier over the crawl space floor with all seams taped.",
    "rep_notes": null,
    "sort_order": 103
   },
@@ -173,7 +173,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install a premium 20 mil reinforced vapor barrier over the crawl space floor, tough enough for crawl space foot traffic.",
    "rep_notes": null,
    "sort_order": 104
   },
@@ -189,7 +189,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install a premium 20 mil reinforced vapor barrier over the crawl space floor with all seams taped.",
    "rep_notes": null,
    "sort_order": 105
   },
@@ -205,7 +205,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install customer-supplied vapor barrier over the crawl space floor.",
    "rep_notes": null,
    "sort_order": 106
   },
@@ -221,7 +221,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Remove and dispose of the old vapor barrier.",
    "rep_notes": null,
    "sort_order": 107
   },
@@ -237,7 +237,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install an Aprilaire crawl space dehumidifier, including a dedicated outlet installed by a licensed electrician, to keep humidity at safe levels year round.",
    "rep_notes": null,
    "sort_order": 110
   },
@@ -253,7 +253,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install an Aprilaire crawl space dehumidifier using the existing outlet, to keep humidity at safe levels year round.",
    "rep_notes": null,
    "sort_order": 111
   },
@@ -269,7 +269,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Replace the existing dehumidifier with a new Aprilaire unit.",
    "rep_notes": null,
    "sort_order": 112
   },
@@ -285,7 +285,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Seal foundation vents with insulated covers to keep humid outside air out of the crawl space.",
    "rep_notes": null,
    "sort_order": 120
   },
@@ -301,7 +301,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install a sump pump with a dedicated outlet installed by a licensed electrician, discharging water away from the home.",
    "rep_notes": "1 pump per 75 ln ft",
    "sort_order": 130
   },
@@ -317,7 +317,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install a sump pump using the existing outlet, discharging water away from the home.",
    "rep_notes": "1 pump per 75 ln ft",
    "sort_order": 131
   },
@@ -333,7 +333,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install an additional sump pump to handle the length of the drain system.",
    "rep_notes": "Depends on outlet locations",
    "sort_order": 132
   },
@@ -349,7 +349,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install an exterior French drain along the foundation to collect water and carry it away from the home.",
    "rep_notes": null,
    "sort_order": 140
   },
@@ -365,7 +365,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install an interior French drain around the crawl space perimeter to collect water and direct it to the sump pump.",
    "rep_notes": null,
    "sort_order": 141
   },
@@ -381,7 +381,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Screen foundation vents to keep rodents and wildlife out of the crawl space.",
    "rep_notes": null,
    "sort_order": 150
   },
@@ -397,7 +397,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install drip edge flashing along the roofline to direct rainwater away from the foundation and seal gaps where pests enter.",
    "rep_notes": null,
    "sort_order": 160
   },
@@ -413,7 +413,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install custom bent metal drip edge flashing to seal builder gaps along the roofline and direct water away from the home.",
    "rep_notes": null,
    "sort_order": 161
   },
@@ -429,7 +429,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install siding shield flashing along the bottom of the siding to keep water and pests out.",
    "rep_notes": null,
    "sort_order": 162
   },
@@ -445,7 +445,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": "Includes 20 mil vapor barrier attached to walls, foam board, vent covers, taped seams, dehumidifier with electrician, and fungus treatment",
+   "description": "Complete crawl space encapsulation: 20 mil vapor barrier sealed to the walls with taped seams, foam board on the walls, vent covers, an Aprilaire dehumidifier with electrician, and a fungus treatment.",
    "rep_notes": "Add ~12 sq ft per pier for pier wrapping. Over 2,500 sq ft may need an additional dehumidifier.",
    "sort_order": 170
   },
@@ -461,7 +461,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": "Includes 20 mil vapor barrier attached to walls, vent covers, taped seams, dehumidifier with electrician, and fungus treatment",
+   "description": "Complete crawl space encapsulation: 20 mil vapor barrier sealed to the walls with taped seams, vent covers, an Aprilaire dehumidifier with electrician, and a fungus treatment.",
    "rep_notes": "Add ~12 sq ft per pier for pier wrapping. Over 2,500 sq ft may need an additional dehumidifier.",
    "sort_order": 171
   },
@@ -477,7 +477,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install R-19 insulation between the floor joists to keep floors warmer and lower energy costs.",
    "rep_notes": "By section: 1 batt is about 9 sq ft",
    "sort_order": 180
   },
@@ -493,7 +493,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Remove and dispose of old, damaged, or fallen crawl space insulation.",
    "rep_notes": "Sheet lists $1.75 with no unit; assumed per sq ft",
    "sort_order": 181
   },
@@ -509,7 +509,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Remove old crawl space insulation and install new R-19 insulation between the floor joists.",
    "rep_notes": null,
    "sort_order": 182
   },
@@ -525,7 +525,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Sister or replace damaged floor joists with new treated lumber to restore strength to the floor.",
    "rep_notes": null,
    "sort_order": 200
   },
@@ -541,7 +541,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Replace damaged sill plate (under 8 ft per section) with new treated lumber where the house framing sits on the foundation.",
    "rep_notes": null,
    "sort_order": 210
   },
@@ -557,7 +557,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Replace damaged band board (rim joist) with new treated lumber, first 3 sections.",
    "rep_notes": "Minimum of 3 sections",
    "sort_order": 220
   },
@@ -573,7 +573,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Replace additional sections of damaged band board (rim joist) with new treated lumber.",
    "rep_notes": null,
    "sort_order": 221
   },
@@ -589,7 +589,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Replace or reinforce the damaged girder (main support beam) to restore support to the floor system.",
    "rep_notes": null,
    "sort_order": 230
   },
@@ -605,7 +605,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Replace a damaged section of subfloor from below with new material.",
    "rep_notes": null,
    "sort_order": 240
   },
@@ -621,7 +621,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": "Covers demo and new board",
+   "description": "Remove damaged subfloor from above and install new subfloor, including demo and new board.",
    "rep_notes": null,
    "sort_order": 241
   },
@@ -637,7 +637,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Dumpster and disposal of debris from the demolition work.",
    "rep_notes": null,
    "sort_order": 242
   },
@@ -653,7 +653,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install a new crawl space foundation vent.",
    "rep_notes": null,
    "sort_order": 250
   },
@@ -669,7 +669,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Install a new, tight-fitting crawl space access door.",
    "rep_notes": null,
    "sort_order": 251
   },
@@ -685,7 +685,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Build and install a custom crawl space access door with a new frame.",
    "rep_notes": null,
    "sort_order": 252
   },
@@ -701,7 +701,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Remove existing attic insulation (10 in or less), then install Pro-Shield pest-control insulation to R-49 (about 13 in), the Department of Energy recommended level. Pro-Shield is treated with boric acid for lasting pest control and added fire resistance.",
    "rep_notes": null,
    "sort_order": 300
   },
@@ -717,7 +717,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Remove existing attic insulation (over 10 in), then install Pro-Shield pest-control insulation to R-49 (about 13 in), the Department of Energy recommended level. Pro-Shield is treated with boric acid for lasting pest control and added fire resistance.",
    "rep_notes": null,
    "sort_order": 301
   },
@@ -733,7 +733,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": null,
+   "description": "Add a 6 in layer of Pro-Shield pest-control insulation over the existing insulation to improve comfort and energy efficiency.",
    "rep_notes": null,
    "sort_order": 302
   },
@@ -749,7 +749,7 @@
    "initial_price": 225,
    "recurring_price": 49,
    "recurring_interval": "month",
-   "description": "General pest control",
+   "description": "General pest control: quarterly service with unlimited call-backs and re-treatments between visits.",
    "rep_notes": "Billed monthly; quarterly service visits with unlimited call-backs / retreats",
    "sort_order": 400
   },
@@ -765,7 +765,7 @@
    "initial_price": 250,
    "recurring_price": 69,
    "recurring_interval": "month",
-   "description": "General pest + rodents",
+   "description": "General pest and rodent control: quarterly service with unlimited call-backs and re-treatments between visits.",
    "rep_notes": "Billed monthly; quarterly service visits with unlimited call-backs / retreats",
    "sort_order": 401
   },
@@ -781,7 +781,7 @@
    "initial_price": 275,
    "recurring_price": 99,
    "recurring_interval": "month",
-   "description": "General pest + rodent + mosquito",
+   "description": "General pest, rodent, and mosquito control: quarterly service with unlimited call-backs and re-treatments between visits.",
    "rep_notes": "Billed monthly; quarterly service visits with unlimited call-backs / retreats",
    "sort_order": 402
   },
@@ -797,7 +797,7 @@
    "initial_price": 729,
    "recurring_price": 30,
    "recurring_interval": "month",
-   "description": null,
+   "description": "Install Sentricon termite bait stations around the home, with ongoing monitoring and protection.",
    "rep_notes": "Commercial: contact sales manager",
    "sort_order": 410
   },
@@ -813,7 +813,7 @@
    "initial_price": 929,
    "recurring_price": 30,
    "recurring_interval": "month",
-   "description": null,
+   "description": "Install Sentricon termite bait stations around the home (over 400 linear ft of foundation), with ongoing monitoring and protection.",
    "rep_notes": "Commercial: contact sales manager",
    "sort_order": 411
   },
@@ -829,7 +829,7 @@
    "initial_price": null,
    "recurring_price": 175,
    "recurring_interval": "year",
-   "description": null,
+   "description": "Annual termite warranty: yearly inspection, with re-treatment if termites return.",
    "rep_notes": null,
    "sort_order": 420
   },
@@ -845,7 +845,7 @@
    "initial_price": null,
    "recurring_price": 285,
    "recurring_interval": "year",
-   "description": "Every 6 months: clean, filter changed, tubing changed if needed",
+   "description": "Service visit every 6 months: clean the dehumidifier, change the filter, and change tubing if needed. Talent-installed units only.",
    "rep_notes": "Our installs only",
    "sort_order": 421
   },
@@ -861,7 +861,7 @@
    "initial_price": null,
    "recurring_price": 350,
    "recurring_interval": "year",
-   "description": "Dehumidifier warranty plus vapor barrier reinforcement",
+   "description": "Annual encapsulation warranty covering the dehumidifier and vapor barrier, with repairs to the barrier as needed.",
    "rep_notes": null,
    "sort_order": 422
   },
@@ -877,7 +877,7 @@
    "initial_price": null,
    "recurring_price": 125,
    "recurring_interval": "month",
-   "description": "For months where active",
+   "description": "Mosquito treatment around the yard during mosquito season.",
    "rep_notes": null,
    "sort_order": 430
   },
@@ -893,7 +893,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": "No guarantee",
+   "description": "One-time interior and exterior pest treatment. No guarantee.",
    "rep_notes": null,
    "sort_order": 60
   },
@@ -909,7 +909,7 @@
    "initial_price": null,
    "recurring_price": null,
    "recurring_interval": null,
-   "description": "Per person, per hour",
+   "description": "Additional labor as described, billed per person, per hour.",
    "rep_notes": null,
    "sort_order": 260
   }

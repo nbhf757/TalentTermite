@@ -37,8 +37,10 @@ describe('packages', () => {
   });
 
   it('scope text has quantities, never prices', () => {
-    expect(scopeText(line('Vapor Barrier (20 mil)', 1452))).toBe('Vapor Barrier (20 mil) (1,452 sq ft)');
-    expect(scopeText(line('Floor Joist', 3))).toBe('Floor Joist (3)');
-    expect(scopeText(line('Talent Plus', 1))).toBe('Talent Plus: General pest + rodents');
+    expect(scopeText(line('Vapor Barrier (20 mil)', 1452))).toMatch(/^Install a premium 20 mil .*\(1,452 sq ft\)$/);
+    expect(scopeText(line('Floor Joist', 3))).toMatch(/floor joists .*\(qty 3\)$/);
+    expect(scopeText(line('Talent Plus', 1))).toMatch(/^General pest and rodent control/);
+    expect(scopeText({ key: 'x', qty: 2, item: { ...get('Floor Joist'), description: null } })).toBe('Floor Joist (qty 2)');
+    expect(scopeText(line('Termidor HE Termite Treatment', 140))).not.toMatch(/\$/);
   });
 });
