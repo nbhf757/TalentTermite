@@ -91,7 +91,7 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
                   </div>
                 ) : (
                   <label className="line-qty">{l.item.unit === 'lump' ? 'qty' : l.item.unit}
-                    <input inputMode="decimal" value={l.qty} onChange={e => patchLine(l.key, { qty: e.target.value === '' ? null : Number(e.target.value) })} />
+                    <QtyInput value={l.qty} onChange={qty => patchLine(l.key, { qty })} />
                   </label>
                 )}
                 {VARIANTS[l.item.name] && (
@@ -211,4 +211,20 @@ export function workIsSellable(work: Work, book: PriceBook, totals: Totals) {
   if (dp.belowRequired) problems.push('Down payment is below the required amount.');
   if (lines.some(l => l.item.name === TOP_DOWN_SUBFLOOR) && !work.topDownAck) problems.push('Confirm demo, dumpster, and flooring notice for the top-down subfloor.');
   return { quote: q, down: dp, problems };
+}
+
+/** Quantity box that can be cleared while typing (e.g. delete the 1, type 3). Empty on leaving = follow the drawing. */
+function QtyInput({ value, onChange }: { value: number; onChange: (qty: number | null) => void }) {
+  const [text, setText] = useState<string | null>(null); // non-null while the rep is typing
+  return (
+    <input inputMode="decimal" value={text ?? String(value)}
+      onFocus={e => { setText(String(value)); e.target.select(); }}
+      onChange={e => {
+        const t = e.target.value.replace(/[^0-9.]/g, '');
+        setText(t);
+        const n = Number(t);
+        if (t !== '' && Number.isFinite(n) && n > 0) onChange(n);
+      }}
+      onBlur={() => { if (text === '' || !(Number(text) > 0)) onChange(null); setText(null); }} />
+  );
 }
