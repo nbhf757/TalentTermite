@@ -20,3 +20,6 @@ export function usePortalUrl(): string | null {
   }, []);
   return url;
 }
+
+/** The portal's "Get Login Info" page, where a customer without a login gets a reset code by text. */
+export const portalForgotUrl = (portal: string) => { try { return new URL('/forgotPassword', portal).toString(); } catch { return portal; } };

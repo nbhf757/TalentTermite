@@ -1,5 +1,6 @@
 // Customer-facing page from the "Review and sign" email link (/?sign=<token>). No login: the token is the key.
 // Shows the saved proposal exactly as the PDF says it, lets the customer pick how to pay, type their name and sign.
+import PortalSteps from '../components/PortalSteps';
 import { useEffect, useState } from 'react';
 import SignaturePad from '../components/SignaturePad';
 import { METHOD_LABEL, type DocBlock, type PaymentMethod, type ProposalDoc } from '../lib/proposalDoc';
@@ -9,7 +10,7 @@ type View =
   | { state: 'loading' }
   | { state: 'error'; message: string; reload?: boolean }
   | { state: 'open'; number: number; doc: ProposalDoc; updated_at: string; customer_name: string; rep_name: string; payment_method: PaymentMethod; portal_url: string | null }
-  | { state: 'signed'; number: number; brand?: string; phone?: string; emailed?: boolean; card?: boolean; portal_url?: string | null };
+  | { state: 'signed'; number: number; brand?: string; phone?: string; emailed?: boolean; card?: boolean; portal_url?: string | null; account?: string | null };
 
 async function call(body: Record<string, unknown>) {
   if (!supabase) throw new Error('This page is not connected. Please call us.');
@@ -95,7 +96,8 @@ export default function CustomerSign({ token }: { token: string }) {
             <h3>Thank you! Proposal #{view.number} is signed.</h3>
             <p>{view.emailed === false ? 'Our office has your signed copy and will send it to you.' : view.emailed ? 'A signed copy is on its way to your email.' : ''} Our office will contact you to schedule.</p>
             {view.card && (<>
-              <p><strong>Next step: add your card.</strong> Sign in to your customer portal and add your card under billing. We never see or store your card number.</p>
+              <p><strong>Next step: add your card.</strong> It goes into your secure customer portal. We never see or store your card number.</p>
+              {view.portal_url && <PortalSteps portal={view.portal_url} account={view.account} />}
               {view.portal_url && <a className="button primary" href={view.portal_url} target="_blank" rel="noopener noreferrer">Open customer portal</a>}
             </>)}
             {view.phone && <p className="small muted">Questions? Call us at {view.phone}.</p>}

@@ -3,6 +3,7 @@ import type { PriceBook } from '../lib/priceBook';
 import type { Suggestion } from '../lib/suggestions';
 import { COMPANY, FINANCING, INTRO, NOTICES, WARRANTY } from '../lib/terms';
 import SignaturePad from '../components/SignaturePad';
+import PortalSteps from '../components/PortalSteps';
 import { INTERVAL, METHOD_LABEL, ONGOING_LABEL, money as $, packagePriceText, proposalView, recurringNote, totalLabel, type PaymentMethod } from '../lib/proposalDoc';
 import { BRANDS, customerReady, type Brand, type Customer } from './CustomerScreen';
 import type { Work } from './WorkScreen';
@@ -150,6 +151,7 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
           {signoff.method === 'card' && (
             <div className="financing">
               <p className="small"><strong>Next: add your card in the customer portal.</strong> {customer.email ? 'The link is also in your emailed copy.' : 'Our office can also take it by phone.'}</p>
+              {portal && <PortalSteps portal={portal} account={customer.fr_customer_id} />}
               {portal
                 ? <a className="button primary" href={portal} target="_blank" rel="noopener noreferrer">Open customer portal</a>
                 : <p className="small muted">Rep: the portal link isn't set up in the app yet. Help the customer sign in to the portal, or the office will call for the card.</p>}

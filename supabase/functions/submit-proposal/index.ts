@@ -214,9 +214,19 @@ async function portalUrl(db: Db): Promise<string | null> {
   return typeof u === 'string' && /^https:\/\//.test(u) ? u : null;
 }
 
-async function emailCustomer(to: string, firstName: string, brand: string, phone: string, number: number, pdf: Uint8Array, cardPortal: string | null | false) {
+// Nathan 2026-11-24: customers don't know their portal login. First time: "Get Login Info" texts a reset code,
+// then they set a password using their account number (= FieldRoutes customer ID) and that code.
+const forgotUrl = (portal: string) => { try { return new URL('/forgotPassword', portal).toString(); } catch { return portal; } };
+
+async function emailCustomer(to: string, firstName: string, brand: string, phone: string, number: number, pdf: Uint8Array, cardPortal: string | null | false, account: string | null) {
+  const acct = account ? `<strong>${esc(account)}</strong>` : 'shown in the text you receive';
   const card = cardPortal === false ? '' : cardPortal
-    ? `<p><strong>Next step: add your card.</strong> Sign in to your customer portal at <a href="${esc(cardPortal)}">${esc(cardPortal)}</a> and add your card under billing. We never see or store your card number. Prefer the phone? Call us at ${esc(phone)}.</p>`
+    ? `<p><strong>Next step: add your card.</strong> We never see or store your card number. It goes into your secure customer portal:</p>
+<ol><li>Open <a href="${esc(forgotUrl(cardPortal))}">your customer portal's Get Login Info page</a>.</li>
+<li>Enter the mobile number on your account. We'll text you a reset code.</li>
+<li>On the reset page, enter your account number (${acct}), the code, and a new password.</li>
+<li>Sign in at <a href="${esc(cardPortal)}">${esc(cardPortal)}</a> and add your card under billing.</li></ol>
+<p>Already have a login? Just sign in. Prefer the phone? Call us at ${esc(phone)}.</p>`
     : `<p><strong>Next step: your card.</strong> Our office will call you to add your card securely, or you can add it in your customer portal.</p>`;
   const e = await sendEmail({
     to: [to], fromName: brand, subject: `Your signed ${brand} proposal (#${number})`,
@@ -380,7 +390,7 @@ async function finishSigned(db: Db, s: Signed) {
     let emailed = false, note: string | undefined;
     if (c.email) {
       const cardPortal = p.payment_method === 'card' ? await portalUrl(db).catch(() => null) : false;
-      const e = await emailCustomer(c.email, c.first_name ?? '', p.doc.brand, p.doc.company.phone, number, pdf, cardPortal);
+      const e = await emailCustomer(c.email, c.first_name ?? '', p.doc.brand, p.doc.company.phone, number, pdf, cardPortal, cust.fr_customer_id);
       emailed = e.ok; note = e.note;
       if ('response' in e) await db.from('fr_sync_log').insert({ proposal_id: id, action: 'email_customer', response: { body: e.response }, ok: e.ok });
       if (emailed) await db.from('proposals').update({ customer_emailed_at: new Date().toISOString() }).eq('id', id);
@@ -519,7 +529,7 @@ async function customerLink(db: Db, req: Request, b: PublicReq) {
         html: `<p>${esc(names.customer)} signed proposal #${r.number} online. Payment: ${esc(METHOD_TEXT[method])}.</p><p>The signed PDF is attached and is in FieldRoutes.</p>`,
         attachments: [{ filename: `proposal-${r.number}-signed.pdf`, content: b64(pdf) }] });
     } catch (e) { console.error('notify rep', (e as Error).message); }
-    return json({ signed: true, number: r.number, emailed: done.emailed, card: method === 'card', portal_url: method === 'card' ? await portalUrl(db) : null, brand: doc.brand, phone });
+    return json({ signed: true, number: r.number, emailed: done.emailed, card: method === 'card', portal_url: method === 'card' ? await portalUrl(db) : null, account: method === 'card' ? cust.fr_customer_id : null, brand: doc.brand, phone });
   } catch (e) {
     // Put it back so the customer can try again.
     await db.from('proposals').update({ status: 'viewed', signed_at: null, sign_token_hash: await tokenHash(b.token!), signed_via: null }).eq('id', r.id);
