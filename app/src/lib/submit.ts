@@ -45,6 +45,8 @@ export function buildSubmission(i: SubmitInput) {
     comments: i.comments,
     top_down_ack: !!i.work.topDownAck,
     doc: buildProposalDoc(i, i.signedAt ? new Date(i.signedAt) : new Date()),
+    // Everything needed to reopen this proposal later on any device (signatures are never included).
+    app_draft: { v: 1, brand: i.brand, customer: i.customer, sections: i.sections, answers: i.answers, comments: i.comments, work: i.work },
     signatures: i.signedAt && i.customerSig && i.repSig ? { customer: i.customerSig, rep: i.repSig } : null,
   };
 }

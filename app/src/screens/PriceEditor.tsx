@@ -13,7 +13,7 @@ type Field = (typeof EDITABLE_FIELDS)[number];
 const SECTIONS: [string, string][] = [['foundation', 'Foundation'], ['moisture', 'Moisture'], ['pest', 'Pest'], ['attic', 'Attic'], ['recurring', 'Ongoing plans']];
 const UNIT: Record<string, string> = { each: 'each', lf: 'per lf', sf: 'per sq ft', hour: 'per hour', lump: 'flat' };
 
-export default function PriceEditor({ onClose }: { onClose: () => void }) {
+export default function PriceEditor({ onClose, onMaterials }: { onClose: () => void; onMaterials?: () => void }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [edits, setEdits] = useState<Record<string, Partial<Row>>>({});
   const [msg, setMsg] = useState('');
@@ -64,7 +64,10 @@ export default function PriceEditor({ onClose }: { onClose: () => void }) {
     <div className="screen">
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h2 style={{ margin: 0 }}>Price book</h2>
-        <button onClick={() => { if (!changed.length || confirm('Discard unsaved price changes?')) onClose(); }}>Done</button>
+        <span className="row" style={{ gap: 8 }}>
+          {onMaterials && <button onClick={() => { if (!changed.length || confirm('Discard unsaved price changes?')) onMaterials(); }}>Materials</button>}
+          <button onClick={() => { if (!changed.length || confirm('Discard unsaved price changes?')) onClose(); }}>Done</button>
+        </span>
       </div>
       <p className="muted small">Prices are never shown per item to customers; they set the package totals. Blank minimum = no minimum.</p>
       <input placeholder="Find an item" value={filter} onChange={e => setFilter(e.target.value)} style={{ width: '100%', marginBottom: 12 }} />

@@ -2,11 +2,12 @@
 // Unsigned (no signatures sent): status 'sent', PDF marked NOT SIGNED. Saving again with the same client_ref
 // updates an unsigned proposal (e.g. the customer signs later); a signed proposal is never changed.
 // Requires a signed-in user (verify_jwt). Writes with the service role because signatures are server-written only.
-// Email: Resend, when the secrets RESEND_API_KEY and EMAIL_FROM are set. Without them the proposal still saves.
+// Email: Microsoft 365 (Graph) as office@, when the MS_* and MAIL_FROM secrets are set. Without them the proposal still saves.
 // Request: POST the payload from app/src/lib/submit.ts (buildSubmission).
 // Response: { proposal_id, number, status, emailed, email_note? }
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'npm:pdf-lib@1.17.1';
+import { buildBom, type Bom, type Recipe } from './bom.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -28,7 +29,7 @@ type Payload = {
   payment_method: '' | 'check_cash' | 'card' | 'finance_sac' | 'finance_5yr';
   lines: Record<string, unknown>[]; drawings: Record<string, unknown>[];
   answers: { point_key: string; answer: string; notes: string | null }[];
-  comments: string; top_down_ack: boolean; doc: Doc;
+  comments: string; top_down_ack: boolean; doc: Doc; app_draft?: Record<string, unknown> | null;
   signatures?: { customer: string; rep: string } | null;
 };
 
@@ -160,21 +161,96 @@ const sha256 = async (bytes: Uint8Array) =>
   [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 
-async function emailCustomer(to: string, firstName: string, brand: string, phone: string, number: number, pdf: Uint8Array) {
-  const key = Deno.env.get('RESEND_API_KEY'), from = Deno.env.get('EMAIL_FROM');
-  if (!key || !from) return { ok: false, note: 'Customer email is not set up yet. The office has the signed PDF.' };
-  const r = await fetch('https://api.resend.com/emails', {
-    method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+// Email goes out through Microsoft 365 as office@talenttermite.com (Microsoft Graph, app-only).
+// Secrets: MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, MAIL_FROM (office@talenttermite.com).
+// The Azure app is limited in Exchange to sending as that one mailbox. Sent mail lands in its Sent Items.
+type Mail = { to: string[]; subject: string; html: string; attachments: { filename: string; content: string }[]; fromName: string };
+let graphToken: { value: string; exp: number } | null = null;
+async function msToken() {
+  if (graphToken && graphToken.exp > Date.now() + 60_000) return graphToken.value;
+  const tenant = Deno.env.get('MS_TENANT_ID'), id = Deno.env.get('MS_CLIENT_ID'), secret = Deno.env.get('MS_CLIENT_SECRET');
+  if (!tenant || !id || !secret) return null;
+  const r = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
+    method: 'POST', body: new URLSearchParams({ client_id: id, client_secret: secret, scope: 'https://graph.microsoft.com/.default', grant_type: 'client_credentials' }),
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(`Microsoft sign-in failed: ${String(d.error_description ?? d.error ?? r.status).slice(0, 160)}`);
+  graphToken = { value: d.access_token, exp: Date.now() + Number(d.expires_in ?? 3000) * 1000 };
+  return graphToken.value;
+}
+async function sendEmail(m: Mail) {
+  const from = Deno.env.get('MAIL_FROM');
+  let token: string | null;
+  try { token = await msToken(); } catch (e) { return { ok: false, note: (e as Error).message, response: '' }; }
+  if (!token || !from) return { ok: false, note: 'Email is not set up yet.' };
+  const r = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(from)}/sendMail`, {
+    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: `${brand} <${from}>`, to: [to], reply_to: Deno.env.get('EMAIL_REPLY_TO') || undefined,
-      subject: `Your signed ${brand} proposal (#${number})`,
-      html: `<p>Hi ${esc(firstName || 'there')},</p><p>Thank you for choosing ${esc(brand)}. Your signed proposal is attached.</p>` +
-        `<p>Our office will contact you to schedule. Questions? Call us at ${esc(phone)}.</p><p>${esc(brand)}</p>`,
-      attachments: [{ filename: `${brand.replace(/\s+/g, '-')}-proposal-${number}.pdf`, content: b64(pdf) }],
+      saveToSentItems: true,
+      message: {
+        subject: m.subject, body: { contentType: 'HTML', content: m.html },
+        toRecipients: m.to.map(address => ({ emailAddress: { address } })),
+        attachments: m.attachments.map(a => ({ '@odata.type': '#microsoft.graph.fileAttachment', name: a.filename, contentType: 'application/pdf', contentBytes: a.content })),
+      },
     }),
   });
   const body = await r.text();
-  return r.ok ? { ok: true, note: undefined, response: body } : { ok: false, note: `Email failed (${r.status}). The office has the signed PDF.`, response: body.slice(0, 500) };
+  return r.ok ? { ok: true, note: undefined, response: body || 'accepted' } : { ok: false, note: `Email failed (${r.status}).`, response: body.slice(0, 500) };
+}
+
+async function emailCustomer(to: string, firstName: string, brand: string, phone: string, number: number, pdf: Uint8Array) {
+  const e = await sendEmail({
+    to: [to], fromName: brand, subject: `Your signed ${brand} proposal (#${number})`,
+    html: `<p>Hi ${esc(firstName || 'there')},</p><p>Thank you for choosing ${esc(brand)}. Your signed proposal is attached.</p>` +
+      `<p>Our office will contact you to schedule. Questions? Call us at ${esc(phone)}.</p><p>${esc(brand)}</p>`,
+    attachments: [{ filename: `${brand.replace(/\s+/g, '-')}-proposal-${number}.pdf`, content: b64(pdf) }],
+  });
+  return e.ok ? e : { ...e, note: e.note === 'Email is not set up yet.' ? 'Customer email is not set up yet. The office has the signed PDF.' : `${e.note} The office has the signed PDF.` };
+}
+
+// ---------- Bill of materials ----------
+// Nathan 2026-11-24: the materials list goes to Lindsey and the office. Override with secret BOM_EMAIL_TO (comma list).
+const bomRecipients = () => (Deno.env.get('BOM_EMAIL_TO') || 'lindsey@talenttermite.com,office@talenttermite.com')
+  .split(',').map(x => x.trim()).filter(Boolean);
+
+async function makeBom(db: Db, lines: Record<string, unknown>[]): Promise<Bom> {
+  const sold = lines.map(l => ({ price_item_id: (l.price_item_id as string | null) ?? null, name: String(l.name ?? ''), qty: Number(l.qty ?? 0) }));
+  const ids = [...new Set(sold.map(l => l.price_item_id).filter((x): x is string => !!x))];
+  const { data } = ids.length
+    ? await db.from('price_item_recipe').select('price_item_id, material_id, qty_per_unit, fixed_qty, draft, material:materials(name, unit, unit_cost, supplier, sort_order, active)').in('price_item_id', ids).throwOnError()
+    : { data: [] };
+  const recipes = ((data ?? []) as unknown as (Recipe & { material: Recipe['material'] & { active: boolean } })[]).filter(r => r.material?.active !== false);
+  return buildBom(sold, recipes);
+}
+
+async function renderBomPdf(bom: Bom, doc: Doc, number: number, repName: string) {
+  const pdf = await PDFDocument.create();
+  pdf.setTitle(`Materials list, proposal #${number}`);
+  const reg = await pdf.embedFont(StandardFonts.Helvetica), bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const W = 612, H = 792, M = 40;
+  const ink = rgb(0.1, 0.1, 0.1), muted = rgb(0.4, 0.4, 0.4), warn = rgb(0.7, 0.3, 0.0);
+  let page = pdf.addPage([W, H]); let y = H - M;
+  const t = (s: string, x: number, size = 9, f = reg, color = ink) => page.drawText(clean(s), { x, y, size, font: f, color });
+  const next = (h: number) => { y -= h; if (y < M + 20) { page = pdf.addPage([W, H]); y = H - M - h; } };
+  next(16); t(`Materials list - proposal #${number}`, M, 15, bold);
+  next(14); t(`${doc.brand} - ${doc.customerLines.slice(0, 2).join(' - ')}`, M, 9.5, reg, muted);
+  next(12); t(`Sold by ${repName} - ${doc.date}`, M, 9.5, reg, muted);
+  if (bom.has_draft) { next(14); t('DRAFT quantities: some recipes are not confirmed yet. Check before ordering.', M, 9.5, bold, warn); }
+  const cols = [M, M + 40, M + 80, M + 380, M + 420];
+  next(20); ['Order', 'Unit', 'Material', 'Need', 'For'].forEach((h, i) => t(h, cols[i], 9, bold));
+  page.drawLine({ start: { x: M, y: y - 3 }, end: { x: W - M, y: y - 3 }, thickness: 0.5, color: muted });
+  for (const r of bom.rows) {
+    next(14);
+    t(String(r.order), cols[0], 10, bold); t(r.unit, cols[1]); t(r.material.slice(0, 66), cols[2], 8.5);
+    t(String(r.need), cols[3], 9, reg, muted); t(r.for_items.map(n => n.replace(/\s*\(.*\)$/, '')).join(', ').slice(0, 30), cols[4], 8, reg, muted);
+  }
+  if (!bom.rows.length) { next(14); t('No materials are set up for the items on this job.', M); }
+  if (bom.no_recipe.length) {
+    next(22); t('No materials set up for:', M, 9, bold);
+    for (const n of bom.no_recipe) { next(12); t(`- ${n}`, M + 8, 9, reg, muted); }
+  }
+  if (bom.est_cost != null) { next(20); t(`Estimated material cost: ${bom.est_cost.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}`, M, 10, bold); }
+  return await pdf.save();
 }
 
 // ---------- FieldRoutes write-back ----------
@@ -321,7 +397,7 @@ Deno.serve(async req => {
       payment_method: fin ? 'financing' : (p.payment_method || null), financing_plan: fin,
       down_payment_amount: p.quote.down_amount, down_payment_pct: p.quote.down_pct,
       price_book_version: p.price_book.loaded_at, price_book_source: p.price_book.source,
-      top_down_ack: p.top_down_ack, doc: p.doc, signed_at: signing ? p.signed_at : null, updated_at: now,
+      top_down_ack: p.top_down_ack, doc: p.doc, app_draft: p.app_draft ?? null, signed_at: signing ? p.signed_at : null, updated_at: now,
     };
     let id: string, number: number;
     if (existing) {
@@ -375,8 +451,29 @@ Deno.serve(async req => {
       if (emailed) await db.from('proposals').update({ customer_emailed_at: new Date().toISOString() }).eq('id', id);
     } else note = 'No customer email on file, so no copy was emailed.';
 
+    // Materials list for the office. Never fails the save.
+    let bomNote: string | undefined;
+    try {
+      const bom = await makeBom(db, p.lines);
+      const bomPdf = await renderBomPdf(bom, p.doc, number, names.rep);
+      await up(`${dir}/bom.pdf`, bomPdf, 'application/pdf');
+      await db.from('proposals').update({ bom, bom_pdf_path: `${dir}/bom.pdf` }).eq('id', id).throwOnError();
+      const e = await sendEmail({
+        to: bomRecipients(), fromName: 'Talent Proposals', subject: `Materials list - SOLD proposal #${number} (${names.customer})`,
+        html: `<p>Proposal #${number} for ${esc(names.customer)} was signed. Sold by ${esc(names.rep)}.</p>` +
+          `<p>The materials list is attached${bom.has_draft ? ' (some quantities are DRAFT, check before ordering)' : ''}. The signed proposal is attached too.</p>`,
+        attachments: [{ filename: `materials-${number}.pdf`, content: b64(bomPdf) }, { filename: `proposal-${number}-signed.pdf`, content: b64(pdf) }],
+      });
+      if ('response' in e) await db.from('fr_sync_log').insert({ proposal_id: id, action: 'email_bom', response: { body: e.response }, ok: e.ok });
+      bomNote = e.ok ? undefined : `Materials list saved but not emailed: ${e.note}`;
+      if (cust.fr_customer_id && frBase()) {
+        try { await frUploadPdf(db, id, cust.fr_customer_id, bomPdf, `materials-${number}.pdf`, `Materials list #${number}`, false); }
+        catch (err) { bomNote = [bomNote, `Materials list not uploaded to FieldRoutes: ${(err as Error).message}`].filter(Boolean).join(' '); }
+      }
+    } catch (err) { bomNote = `Materials list failed: ${(err as Error).message}`; console.error('bom', bomNote); }
+
     const fr = await writeBack(db, id, number, cust.fr_customer_id, pdf, true, p, names.rep);
-    return json({ proposal_id: id, number, status: 'signed', emailed, email_note: note, fr });
+    return json({ proposal_id: id, number, status: 'signed', emailed, email_note: note, bom_note: bomNote, fr });
   } catch (e) {
     const msg = (e as { message?: string }).message ?? String(e);
     console.error('submit-proposal', msg);

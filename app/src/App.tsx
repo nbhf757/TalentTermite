@@ -13,6 +13,9 @@ import { supabase } from './lib/supabase';
 import SignIn, { ALLOWED_DOMAIN, isAllowedEmail, useSession } from './components/SignIn';
 import { buildSubmission, submitProposal } from './lib/submit';
 import PriceEditor from './screens/PriceEditor';
+import OpenProposals from './screens/OpenProposals';
+import MaterialsEditor from './screens/MaterialsEditor';
+import type { OpenRow } from './lib/openProposals';
 import './App.css';
 
 const STEPS = ['Customer', 'Drawing', 'Inspection', 'Work', 'Proposal'] as const;
@@ -40,6 +43,8 @@ export default function App() {
   const session = useSession();
   const [isAdmin, setIsAdmin] = useState(false);
   const [editingPrices, setEditingPrices] = useState(false);
+  const [showOpen, setShowOpen] = useState(false);
+  const [editingMaterials, setEditingMaterials] = useState(false);
   useEffect(() => {
     if (!session || !supabase) { setIsAdmin(false); return; }
     supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle()
@@ -50,14 +55,26 @@ export default function App() {
     saveDraft<Draft>({ step, sections, answers, comments, work, brand, customer, signoff });
   }, [step, sections, answers, comments, work, brand, customer, signoff]);
 
+  const unsent = (signoff.signedAt && signoff.save?.status !== 'saved') || (!signoff.signedAt && signoff.unsigned?.status !== 'saved' && work.lines.length > 0);
+  const load = (d: Draft) => {
+    setStep(d.step); setSections(d.sections); setAnswers(d.answers); setComments(d.comments);
+    setWork(d.work); setBrand(d.brand); setCustomer(d.customer); setSignoff(d.signoff);
+  };
   const startNew = () => {
-    const unsent = (signoff.signedAt && signoff.save?.status !== 'saved') || (!signoff.signedAt && signoff.unsigned?.status !== 'saved' && work.lines.length > 0);
     if (!window.confirm(unsent
       ? 'This proposal has NOT been saved to the office. Clearing it loses it. Start a new proposal anyway? (Use "Save, not signed yet" on the Proposal step to keep it.)'
       : 'Start a new proposal? The current one will be cleared from this device.')) return;
-    const d = freshDraft(); clearDraft();
-    setStep(d.step); setSections(d.sections); setAnswers(d.answers); setComments(d.comments);
-    setWork(d.work); setBrand(d.brand); setCustomer(d.customer); setSignoff(d.signoff);
+    clearDraft(); load(freshDraft());
+  };
+  // Reopen a saved, unsigned proposal so the customer can sign it. Saving or signing updates the same proposal.
+  const reopen = (r: OpenRow) => {
+    if (unsent && !window.confirm('The proposal on this device has NOT been saved to the office. Opening another one replaces it. Continue?')) return;
+    const d = r.app_draft as Partial<Draft>;
+    load({
+      ...freshDraft(), ...d, step: 'Proposal',
+      signoff: { ...emptySignoff(), clientRef: r.client_ref ?? undefined, unsigned: { status: 'saved', number: r.number, at: r.updated_at ?? r.sent_at ?? '' } },
+    });
+    setShowOpen(false);
   };
   const [book, setBook] = useState<PriceBook>(emptyBook);
 
@@ -123,11 +140,15 @@ export default function App() {
         <span className="sub">Inspection &amp; Proposal</span>
         <span className="top-actions">
           <button className="top-btn" onClick={startNew}>New</button>
-          {isAdmin && <button className="top-btn" onClick={() => setEditingPrices(true)}>Prices</button>}
+          <button className="top-btn" onClick={() => { setEditingPrices(false); setEditingMaterials(false); setShowOpen(!showOpen); }}>Open</button>
+          {isAdmin && <button className="top-btn" onClick={() => { setShowOpen(false); setEditingMaterials(false); setEditingPrices(true); }}>Prices</button>}
           <button className="top-btn" title={session.user.email} onClick={() => supabase!.auth.signOut()}>Sign out</button>
         </span>
       </header>
-      {editingPrices ? <main><PriceEditor onClose={() => { setEditingPrices(false); loadPriceBook().then(setBook); }} /></main> : <>
+      {showOpen ? <main><OpenProposals onOpen={reopen} onClose={() => setShowOpen(false)} /></main>
+      : editingMaterials ? <main><MaterialsEditor onClose={() => setEditingMaterials(false)} /></main>
+      : editingPrices ? <main><PriceEditor onClose={() => { setEditingPrices(false); loadPriceBook().then(setBook); }}
+          onMaterials={() => { setEditingPrices(false); setEditingMaterials(true); }} /></main> : <>
       <nav className="steps">
         {STEPS.map((s, i) => (
           <button key={s} className={s === step ? 'step active' : 'step'} onClick={() => setStep(s)}>{i + 1}. {s}</button>
