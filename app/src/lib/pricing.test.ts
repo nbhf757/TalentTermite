@@ -68,3 +68,12 @@ describe('recurringSummary', () => {
     ])).toEqual({ month: 129, year: 175 });
   });
 });
+
+describe('packagePriceText', () => {
+  it('shows start-up and ongoing amounts separately', async () => {
+    const { packagePriceText } = await import('./proposalDoc');
+    expect(packagePriceText({ price: 979, recurring: { month: 99 } })).toBe('$979.00 to start + $99.00 per month');
+    expect(packagePriceText({ price: 0, recurring: { month: 99 } })).toBe('$99.00 per month');
+    expect(packagePriceText({ price: 1200, recurring: {} })).toBe('$1,200.00');
+  });
+});

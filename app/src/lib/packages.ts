@@ -3,7 +3,7 @@
 // Packaging is automatic (rules below) and works offline; the rep can rename a package or move a
 // line to another package.
 import type { BookItem } from './priceBook';
-import { lineTotal } from './pricing';
+import { lineTotal, recurringSummary } from './pricing';
 import { variantDescription } from './variants';
 
 export type PackageKey = 'structural' | 'water' | 'moisture' | 'exterior' | 'termite' | 'attic' | 'ongoing';
@@ -41,7 +41,10 @@ export const defaultPackaging = (): Packaging => ({ names: {}, moves: {}, combin
 export type PkgLine = { key: string; item: BookItem; qty: number; variant?: string };
 export type Package = {
   key: PackageKey; name: string; pitch: string;
-  lines: PkgLine[]; scope: string[]; price: number; warranties: string[];
+  lines: PkgLine[]; scope: string[];
+  price: number;                        // one-time and start-up charges
+  recurring: Record<string, number>;    // ongoing charges by interval (month, quarter, ...)
+  warranties: string[];
 };
 
 const fmtQty = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 1 });
@@ -80,6 +83,7 @@ export function buildPackages(lines: PkgLine[], p: Packaging): Package[] {
         key, name: p.names[key]?.trim() || autoName, pitch: def.pitch, lines: ls,
         scope: ls.map(scopeText),
         price: Math.round(ls.reduce((s, l) => s + lineTotal({ item: l.item, qty: l.qty }), 0) * 100) / 100,
+        recurring: recurringSummary(ls.map(l => l.item)),
         warranties,
       };
     });

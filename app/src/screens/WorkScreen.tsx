@@ -156,7 +156,7 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
                     </select>
                   </div>
                 ))}
-                {pk.showPackagePrices && <div className="small"><strong>{$(p.price)}</strong></div>}
+                {pk.showPackagePrices && <div className="small"><strong>{$(p.price)}</strong>{Object.entries(p.recurring).map(([k, v]) => <span key={k}> + {$(v)}{INTERVAL[k]}</span>)}</div>}
               </div>
             ))}
             <label className="check small"><input type="checkbox" checked={pk.combineWater} onChange={e => setPk({ combineWater: e.target.checked })} />
@@ -198,7 +198,7 @@ export default function WorkScreen({ book, totals, suggestions, work, onChange }
           </label>
         )}
         {q.discountStatus === 'over_max' && <p className="warn">The most you can discount is {DISCOUNT_ABSOLUTE_MAX}%.</p>}
-        <div className="sum-row total"><span>Total Investment</span><span>{$(q.total)}</span></div>
+        <div className="sum-row total"><span>Total Investment{Object.keys(ongoing).length ? ' (one-time and start-up)' : ''}</span><span>{$(q.total)}</span></div>
         {Object.entries(ongoing).map(([k, v]) => (
           <div key={k} className="sum-row muted"><span>Ongoing after the job</span><span>{$(v)}{INTERVAL[k]}</span></div>
         ))}

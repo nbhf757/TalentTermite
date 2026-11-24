@@ -57,6 +57,17 @@ export function proposalView({ book, totals, work }: Pick<ProposalInput, 'book' 
   return { lines, packaging, packages, quote, down, problems, ongoing, hasAprilaire, terms };
 }
 
+/** Package price for the customer: "$979.00 to start + $99.00 per month", or just the one price when nothing recurs. */
+export function packagePriceText(p: { price: number; recurring: Record<string, number> }) {
+  const ongoing = Object.entries(p.recurring).map(([k, amt]) => `${money(amt)} ${INTERVAL[k] ?? ''}`.trim());
+  if (!ongoing.length) return money(p.price);
+  return p.price > 0 ? `${money(p.price)} to start + ${ongoing.join(' + ')}` : ongoing.join(' + ');
+}
+
+/** Label for the total: when there is ongoing service, say the total is only what is due for the work itself. */
+export const totalLabel = (ongoing: Record<string, number>) => Object.keys(ongoing).length ? 'Total Investment (one-time and start-up)' : 'Total Investment';
+export const ONGOING_LABEL = 'Plus ongoing service';
+
 export function recurringNote(item: { initial_price: number | null; recurring_price: number | null; recurring_interval: string | null }) {
   if (item.recurring_price == null) return '';
   return `${item.initial_price != null ? `${money(item.initial_price)} to start, then ` : ''}${money(item.recurring_price)} ${INTERVAL[item.recurring_interval ?? ''] ?? ''}`.trim();
@@ -79,7 +90,7 @@ export function buildProposalDoc(input: ProposalInput, now = new Date()): Propos
 
   b.push({ kind: 'h', text: 'Your recommended plan' });
   for (const p of v.packages) {
-    b.push({ kind: 'sub', text: v.packaging.showPackagePrices ? `${p.name}  ${money(p.price)}` : p.name });
+    b.push({ kind: 'sub', text: v.packaging.showPackagePrices ? `${p.name}  ${packagePriceText(p)}` : p.name });
     b.push({ kind: 'small', text: p.pitch });
     p.lines.forEach((l, i) => {
       const note = recurringNote(l.item);
@@ -93,8 +104,8 @@ export function buildProposalDoc(input: ProposalInput, now = new Date()): Propos
     b.push({ kind: 'row', text: 'Plan value', right: money(q.subtotal) });
     b.push({ kind: 'row', text: `${input.work.military ? 'Military discount' : 'Discount'} (${q.discountPct}%)`, right: `-${money(q.discountAmount)}` });
   }
-  b.push({ kind: 'row', text: 'Total Investment', right: money(q.total), bold: true });
-  for (const [k, amt] of Object.entries(v.ongoing)) b.push({ kind: 'row', text: 'Ongoing', right: `${money(amt)} ${INTERVAL[k]}` });
+  b.push({ kind: 'row', text: totalLabel(v.ongoing), right: money(q.total), bold: true });
+  for (const [k, amt] of Object.entries(v.ongoing)) b.push({ kind: 'row', text: ONGOING_LABEL, right: `${money(amt)} ${INTERVAL[k]}` });
   if (v.down.amount > 0) {
     b.push({ kind: 'row', text: `Down payment (${v.down.pct}%)`, right: money(v.down.amount) });
     b.push({ kind: 'row', text: 'Balance at completion', right: money(v.down.balance) });

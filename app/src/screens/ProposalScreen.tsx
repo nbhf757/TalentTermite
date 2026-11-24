@@ -3,7 +3,7 @@ import type { PriceBook } from '../lib/priceBook';
 import type { Suggestion } from '../lib/suggestions';
 import { COMPANY, FINANCING, INTRO, NOTICES, WARRANTY } from '../lib/terms';
 import SignaturePad from '../components/SignaturePad';
-import { INTERVAL, METHOD_LABEL, money as $, proposalView, recurringNote, type PaymentMethod } from '../lib/proposalDoc';
+import { INTERVAL, METHOD_LABEL, ONGOING_LABEL, money as $, packagePriceText, proposalView, recurringNote, totalLabel, type PaymentMethod } from '../lib/proposalDoc';
 import { BRANDS, customerReady, type Brand, type Customer } from './CustomerScreen';
 import type { Work } from './WorkScreen';
 import { commentsMissing, type Answers } from '../lib/inspection';
@@ -71,7 +71,7 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
           <div key={p.key} className="pkg">
             <div className="pkg-head">
               <span className="pkg-title">{p.name}</span>
-              {packaging.showPackagePrices && <span className="pkg-price">{$(p.price)}</span>}
+              {packaging.showPackagePrices && <span className="pkg-price">{packagePriceText(p)}</span>}
             </div>
             <div className="muted small">{p.pitch}</div>
             <ul className="pkg-scope">
@@ -88,8 +88,8 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
         <div className="summary">
           {q.discountAmount > 0 && <div className="sum-row"><span>Plan value</span><span>{$(q.subtotal)}</span></div>}
           {q.discountAmount > 0 && <div className="sum-row"><span>{work.military ? 'Military discount' : 'Discount'} ({q.discountPct}%)</span><span>−{$(q.discountAmount)}</span></div>}
-          <div className="sum-row total"><span>Total Investment</span><span>{$(q.total)}</span></div>
-          {Object.entries(ongoing).map(([k, v]) => <div key={k} className="sum-row muted"><span>Ongoing</span><span>{$(v)} {INTERVAL[k]}</span></div>)}
+          <div className="sum-row total"><span>{totalLabel(ongoing)}</span><span>{$(q.total)}</span></div>
+          {Object.entries(ongoing).map(([k, v]) => <div key={k} className="sum-row muted"><span>{ONGOING_LABEL}</span><span>{$(v)} {INTERVAL[k]}</span></div>)}
           {down.amount > 0 && <div className="sum-row"><span>Down payment ({down.pct}%)</span><span>{$(down.amount)}</span></div>}
           {down.amount > 0 && <div className="sum-row"><span>Balance at completion</span><span>{$(down.balance)}</span></div>}
         </div>
