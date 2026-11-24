@@ -198,10 +198,20 @@ async function sendEmail(m: Mail) {
   return r.ok ? { ok: true, note: undefined, response: body || 'accepted' } : { ok: false, note: `Email failed (${r.status}).`, response: body.slice(0, 500) };
 }
 
-async function emailCustomer(to: string, firstName: string, brand: string, phone: string, number: number, pdf: Uint8Array) {
+// Nathan 2026-11-24: card customers are sent to their FieldRoutes customer portal to enter the card.
+async function portalUrl(db: Db): Promise<string | null> {
+  const { data } = await db.from('app_settings').select('value').eq('key', 'customer_portal').maybeSingle();
+  const u = (data?.value as { url?: unknown } | undefined)?.url;
+  return typeof u === 'string' && /^https:\/\//.test(u) ? u : null;
+}
+
+async function emailCustomer(to: string, firstName: string, brand: string, phone: string, number: number, pdf: Uint8Array, cardPortal: string | null | false) {
+  const card = cardPortal === false ? '' : cardPortal
+    ? `<p><strong>Next step: add your card.</strong> Sign in to your customer portal at <a href="${esc(cardPortal)}">${esc(cardPortal)}</a> and add your card under billing. We never see or store your card number. Prefer the phone? Call us at ${esc(phone)}.</p>`
+    : `<p><strong>Next step: your card.</strong> Our office will call you to add your card securely, or you can add it in your customer portal.</p>`;
   const e = await sendEmail({
     to: [to], fromName: brand, subject: `Your signed ${brand} proposal (#${number})`,
-    html: `<p>Hi ${esc(firstName || 'there')},</p><p>Thank you for choosing ${esc(brand)}. Your signed proposal is attached.</p>` +
+    html: `<p>Hi ${esc(firstName || 'there')},</p><p>Thank you for choosing ${esc(brand)}. Your signed proposal is attached.</p>` + card +
       `<p>Our office will contact you to schedule. Questions? Call us at ${esc(phone)}.</p><p>${esc(brand)}</p>`,
     attachments: [{ filename: `${brand.replace(/\s+/g, '-')}-proposal-${number}.pdf`, content: b64(pdf) }],
   });
@@ -335,7 +345,7 @@ async function writeBack(db: Db, id: string, number: number, frCustomerId: strin
   } catch (e) { notes.push(`PDF not uploaded to FieldRoutes: ${(e as Error).message}`); }
   if (signed) {
     const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-    const pay = p.payment_method.startsWith('finance') ? 'Regions Bank financing - approval needed before scheduling' : (p.payment_method || 'not chosen');
+    const pay = p.payment_method.startsWith('finance') ? 'Regions Bank financing - approval needed before scheduling' : p.payment_method === 'card' ? 'card - customer adds it in the FieldRoutes portal; call if it is not on file' : (p.payment_method || 'not chosen');
     const text = `SOLD - schedule proposal #${number} (${p.doc.brand}). Total ${money(p.quote.total)}` +
       (p.quote.down_amount > 0 ? `, ${money(p.quote.down_amount)} down` : '') + `. Payment: ${pay}. Rep: ${repName}. Signed PDF is in Documents.`;
     const t = await frSoldTasks(db, id, frCustomerId, text);
@@ -445,7 +455,8 @@ Deno.serve(async req => {
     // Customer copy
     let emailed = false, note: string | undefined;
     if (c.email) {
-      const e = await emailCustomer(c.email, c.first_name ?? '', p.doc.brand, p.doc.company.phone, number, pdf);
+      const cardPortal = p.payment_method === 'card' ? await portalUrl(db).catch(() => null) : false;
+      const e = await emailCustomer(c.email, c.first_name ?? '', p.doc.brand, p.doc.company.phone, number, pdf, cardPortal);
       emailed = e.ok; note = e.note;
       if ('response' in e) await db.from('fr_sync_log').insert({ proposal_id: id, action: 'email_customer', response: { body: e.response }, ok: e.ok });
       if (emailed) await db.from('proposals').update({ customer_emailed_at: new Date().toISOString() }).eq('id', id);

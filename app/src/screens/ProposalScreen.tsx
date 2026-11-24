@@ -9,6 +9,7 @@ import type { Work } from './WorkScreen';
 import { commentsMissing, type Answers } from '../lib/inspection';
 import { encapsulationIncludes, isEncapsulation } from '../lib/variants';
 import { FINANCING_QR } from '../lib/financingQr';
+import { usePortalUrl } from '../lib/portal';
 
 export type { PaymentMethod };
 export type SaveState =
@@ -29,6 +30,7 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
   comments: string; signoff: Signoff; onSignoff: (s: Signoff) => void; onRetry: () => void; onSaveUnsigned: () => void;
 }) {
   const { packaging, packages, quote: q, down, problems, ongoing, hasAprilaire, terms } = proposalView({ book, totals, work });
+  const portal = usePortalUrl();
   const blockers = [...problems];
   if (!customerReady(customer)) blockers.unshift('Finish the customer details.');
   if (commentsMissing(answers, comments)) blockers.push('Add inspection comments (some points need attention).');
@@ -121,7 +123,7 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
           </div>
           <p className="muted small">*Subject to credit approval.</p>
         </div>
-        {signoff.method === 'card' && <p className="small muted">The card is entered on FieldRoutes' secure form. Talent never sees or stores the card number.</p>}
+        {signoff.method === 'card' && <p className="small muted">After signing, the card goes into your Talent customer portal (FieldRoutes' secure site). Talent never sees or stores the card number.</p>}
       </section>
 
       <section className="card">
@@ -143,6 +145,14 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
         {signed && (<>
           <p><strong>Signed {new Date(signoff.signedAt!).toLocaleString()}.</strong> A copy will be emailed to you, and our office will contact you to schedule.</p>
           <SaveStatus save={signoff.save} email={customer.email} onRetry={onRetry} />
+          {signoff.method === 'card' && (
+            <div className="financing">
+              <p className="small"><strong>Next: add your card in the customer portal.</strong> {customer.email ? 'The link is also in your emailed copy.' : 'Our office can also take it by phone.'}</p>
+              {portal
+                ? <a className="button primary" href={portal} target="_blank" rel="noopener noreferrer">Open customer portal</a>
+                : <p className="small muted">Rep: the portal link isn't set up in the app yet. Help the customer sign in to the portal, or the office will call for the card.</p>}
+            </div>
+          )}
         </>)}
       </section>
       <p className="muted small center">Questions? Call us at {COMPANY.phone} | {COMPANY.email}</p>
