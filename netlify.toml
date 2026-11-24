@@ -1,0 +1,24 @@
+# Netlify builds the rep app from app/.
+[build]
+  base = "app"
+  command = "npm ci && npm run build"
+  publish = "dist"
+  # Skip the build when nothing under app/ changed (saves Netlify credits). Exit 0 = skip.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../netlify.toml"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Single-page app: send every path to index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# No Deploy Previews for pull requests: only the live site builds (saves Netlify credits).
+[context.deploy-preview]
+  ignore = "exit 0"
+
+# No builds for other branches either; work happens on branch "dev" and is merged into phase1-app in batches.
+[context.branch-deploy]
+  ignore = "exit 0"

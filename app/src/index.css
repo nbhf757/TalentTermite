@@ -1,0 +1,6 @@
+
+/* Financing QR codes on the proposal */
+.financing { margin-top: 12px; }
+.qr-row { display: flex; flex-wrap: wrap; gap: 16px; }
+.qr { margin: 0; display: flex; flex-direction: column; align-items: center; max-width: 160px; text-align: center; }
+.qr img { background: #fff; border-radius: 4px; image-rendering: pixelated; }

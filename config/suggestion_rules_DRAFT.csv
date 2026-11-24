@@ -1,6 +1,6 @@
 point,answer_condition,suggested_section,suggested_work,quantity_from_drawing,status
 crawl_standing_water,Yes,Moisture,French drain + sump pump,perimeter LF (drain),DRAFT - Nathan to confirm
-crawl_wood_moisture,>= 20%,Moisture,Dehumidifier (Aprilaire),interior SF (sizing),DRAFT - threshold to confirm
+crawl_moisture_* (highest of 5 readings),>= 20%,Moisture,Dehumidifier (Aprilaire),interior SF (sizing),DRAFT - threshold to confirm
 crawl_musty,Yes,Moisture,Dehumidifier + vapor barrier review,interior SF,DRAFT
 crawl_vapor_barrier,Needs Attention,Moisture,Vapor barrier (replace/upgrade),interior SF x waste,DRAFT
 crawl_encapsulated,No,Moisture,Encapsulation (option),interior SF + perimeter LF,DRAFT
