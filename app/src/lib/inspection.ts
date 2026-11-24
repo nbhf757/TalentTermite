@@ -43,7 +43,7 @@ export function maxMoisture(answers: Answers): number | null {
   return nums.length ? Math.max(...nums) : null;
 }
 
-// Answers that point to a problem. When any are present the rep must write inspection comments.
+// Answers that point to a problem. Each one needs its own note (Nathan 2026-11-24: right under the finding).
 const yes = (v: string) => v === 'Yes', no = (v: string) => v === 'No';
 const NEGATIVE: Record<string, (v: string) => boolean> = {
   crawl_ventilation: no, crawl_musty: yes, crawl_standing_water: yes,
@@ -59,4 +59,7 @@ const NEGATIVE: Record<string, (v: string) => boolean> = {
 export const isNegative = (key: string, a?: Answer) => !!a && !!NEGATIVE[key]?.(a.value);
 /** Labels of the points whose answers need attention, in form order. */
 export const negativePoints = (answers: Answers) => ALL_POINTS.filter(p => isNegative(p.key, answers[p.key])).map(p => p.label);
-export const commentsMissing = (answers: Answers, comments: string) => negativePoints(answers).length > 0 && comments.trim() === '';
+/** Labels of the findings that still need a note. */
+export const notesMissing = (answers: Answers) =>
+  ALL_POINTS.filter(p => isNegative(p.key, answers[p.key]) && !(answers[p.key]?.note ?? '').trim()).map(p => p.label);
+export const commentsMissing = (answers: Answers) => notesMissing(answers).length > 0;

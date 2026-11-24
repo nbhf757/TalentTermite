@@ -33,7 +33,7 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
   const portal = usePortalUrl();
   const blockers = [...problems];
   if (!customerReady(customer)) blockers.unshift('Finish the customer details.');
-  if (commentsMissing(answers, comments)) blockers.push('Add inspection comments (some points need attention).');
+  if (commentsMissing(answers)) blockers.push('Add a note under each inspection finding marked in orange.');
   if (!signoff.method) blockers.push('Choose a payment method.');
   const set = (p: Partial<Signoff>) => onSignoff({ ...signoff, ...p });
   const canSign = blockers.length === 0;

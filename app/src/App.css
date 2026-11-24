@@ -152,3 +152,5 @@ details.recipe.dirty, .mat-row.dirty { background: #fffbeb; }
 .mat-row input.short { flex: 0 1 90px; }
 .recipe-hint { display: block; font-size: 11px; color: var(--muted, #666); }
 @media (max-width: 480px) { .topbar .sub { display: none; } .top-btn { padding-left: 8px; padding-right: 8px; } }
+.point-note { width: 100%; font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.point-note.required { border-color: #b45309; outline: 1px solid #b45309; background: #fff8f0; }
