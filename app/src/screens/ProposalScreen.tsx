@@ -19,7 +19,7 @@ export type SaveState =
 export type Signoff = {
   method: PaymentMethod; customerSig: string | null; repSig: string | null; signedAt: string | null;
   clientRef?: string; save?: SaveState;
-  unsigned?: { status: 'sending' } | { status: 'saved'; number: number; at: string; frNote?: string; frDoc?: boolean } | { status: 'error'; note: string };
+  unsigned?: { status: 'sending'; email?: boolean } | { status: 'saved'; number: number; at: string; frNote?: string; frDoc?: boolean; emailedTo?: string; emailNote?: string } | { status: 'error'; note: string };
 };
 export const emptySignoff = (): Signoff => ({ method: '', customerSig: null, repSig: null, signedAt: null });
 
@@ -27,7 +27,7 @@ const METHODS = Object.entries(METHOD_LABEL) as [Exclude<PaymentMethod, ''>, str
 
 export default function ProposalScreen({ brand, customer, book, totals, work, suggestions, answers, comments, signoff, onSignoff, onRetry, onSaveUnsigned }: {
   brand: Brand; customer: Customer; book: PriceBook; totals: Totals; work: Work; suggestions: Suggestion[]; answers: Answers;
-  comments: string; signoff: Signoff; onSignoff: (s: Signoff) => void; onRetry: () => void; onSaveUnsigned: () => void;
+  comments: string; signoff: Signoff; onSignoff: (s: Signoff) => void; onRetry: () => void; onSaveUnsigned: (emailToSign?: boolean) => void;
 }) {
   const { packaging, packages, quote: q, down, problems, ongoing, hasAprilaire, terms } = proposalView({ book, totals, work });
   const portal = usePortalUrl();
@@ -37,6 +37,8 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
   if (!signoff.method) blockers.push('Choose a payment method.');
   const set = (p: Partial<Signoff>) => onSignoff({ ...signoff, ...p });
   const canSign = blockers.length === 0;
+  // Emailing to sign later: everything but the payment choice, which the customer makes online.
+  const emailBlock = !customer.email ? 'Add the customer\'s email to send it to them.' : blockers.find(b => b !== 'Choose a payment method.');
   const signed = !!signoff.signedAt;
 
   return (
@@ -141,7 +143,7 @@ export default function ProposalScreen({ brand, customer, book, totals, work, su
             Accept and sign
           </button>
         </>)}
-        {!signed && <UnsignedSave state={signoff.unsigned} disabled={problems.length > 0 || !customerReady(customer)} onSave={onSaveUnsigned} />}
+        {!signed && <UnsignedSave state={signoff.unsigned} disabled={problems.length > 0 || !customerReady(customer)} onSave={onSaveUnsigned} emailBlock={emailBlock} email={customer.email} />}
         {signed && (<>
           <p><strong>Signed {new Date(signoff.signedAt!).toLocaleString()}.</strong> A copy will be emailed to you, and our office will contact you to schedule.</p>
           <SaveStatus save={signoff.save} email={customer.email} onRetry={onRetry} />
@@ -182,14 +184,23 @@ function SaveStatus({ save, email, onRetry }: { save?: SaveState; email: string;
 }
 
 /** Customer not ready to sign: save to the office as Sent, with a PDF marked Not signed. */
-function UnsignedSave({ state, disabled, onSave }: { state: Signoff['unsigned']; disabled: boolean; onSave: () => void }) {
+function UnsignedSave({ state, disabled, onSave, emailBlock, email }: { state: Signoff['unsigned']; disabled: boolean; onSave: (emailToSign?: boolean) => void; emailBlock?: string; email: string }) {
+  const sending = state?.status === 'sending';
   return (
     <div className="unsigned-save">
-      <button className="wide" disabled={disabled || state?.status === 'sending'} onClick={onSave}>
-        {state?.status === 'sending' ? 'Saving…' : state?.status === 'saved' ? 'Save changes (not signed yet)' : 'Save, not signed yet'}
+      <p className="small muted">Customer wants to think it over?</p>
+      <button className="wide" disabled={!!emailBlock || sending}
+        onClick={() => { if (window.confirm(`Email this proposal to ${email} so they can review and sign it online?`)) onSave(true); }}>
+        {sending && state.email ? 'Sending…' : 'Email to customer to sign later'}
+      </button>
+      {emailBlock && <p className="small muted">{emailBlock}</p>}
+      <button className="wide" disabled={disabled || sending} onClick={() => onSave(false)}>
+        {sending && !state.email ? 'Saving…' : state?.status === 'saved' ? 'Save changes (not signed yet)' : 'Save, not signed yet'}
       </button>
       {state?.status === 'saved' && <p className="small ok">Saved as proposal #{state.number} ({new Date(state.at).toLocaleTimeString()}).
+        {state.emailedTo && ` Emailed to ${state.emailedTo} with a link to sign online.`}
         {state.frDoc && ' Copy added to the customer in FieldRoutes.'} The customer can still sign here later.
+        {state.emailNote && <span className="warn"> {state.emailNote}</span>}
         {state.frNote && <span className="warn"> {state.frNote}</span>}</p>}
       {state?.status === 'error' && <p className="small warn">Not saved: {state.note}</p>}
     </div>

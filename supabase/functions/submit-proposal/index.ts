@@ -1,10 +1,14 @@
 // Saves a proposal from the rep app and renders its PDF. Signed: status 'signed', signatures saved, customer emailed.
 // Unsigned (no signatures sent): status 'sent', PDF marked NOT SIGNED. Saving again with the same client_ref
 // updates an unsigned proposal (e.g. the customer signs later); a signed proposal is never changed.
-// Requires a signed-in user (verify_jwt). Writes with the service role because signatures are server-written only.
+// The rep path requires a signed-in Talent user (checked in code). Writes with the service role because signatures are server-written only.
 // Email: Microsoft 365 (Graph) as office@, when the MS_* and MAIL_FROM secrets are set. Without them the proposal still saves.
 // Request: POST the payload from app/src/lib/submit.ts (buildSubmission).
 // Response: { proposal_id, number, status, emailed, email_note? }
+// Email to sign (Nathan 2026-11-24): an unsigned save with email_to_sign emails the customer the PDF and a private link
+// (APP_URL/?sign=<token>, 30 days). The customer page calls this function with { action: 'view' | 'sign', token }.
+// Those two actions need no login (the token is the key); everything else needs a signed-in Talent user.
+// Deployed with verify_jwt off for that reason: the rep path checks the user's JWT itself below.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'npm:pdf-lib@1.17.1';
 import { buildBom, type Bom, type Recipe } from './bom.ts';
@@ -31,7 +35,10 @@ type Payload = {
   answers: { point_key: string; answer: string; notes: string | null }[];
   comments: string; top_down_ack: boolean; doc: Doc; app_draft?: Record<string, unknown> | null;
   signatures?: { customer: string; rep: string } | null;
+  email_to_sign?: boolean;
 };
+/** What the sold-job steps need, from the rep's payload or from the saved proposal (customer signed online). */
+type SoldInfo = { payment_method: Payload['payment_method']; doc: Doc; quote: { total: number; down_amount: number } };
 
 const APPROVAL: Record<string, string> = { none: 'none', ok: 'none', manager_flag: 'manager_flag', needs_approval: 'approved' };
 
@@ -56,7 +63,7 @@ function wrap(text: string, font: PDFFont, size: number, width: number): string[
   return out;
 }
 
-async function renderPdf(doc: Doc, number: number, sigs: { customer: Uint8Array; rep: Uint8Array } | null,
+async function renderPdf(doc: Doc, number: number, sigs: { customer: Uint8Array; rep: Uint8Array | null } | null,
   names: { customer: string; rep: string }, signedAt: string | null) {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${doc.brand} proposal #${number}`); pdf.setAuthor(doc.company.legal);
@@ -136,11 +143,13 @@ async function renderPdf(doc: Doc, number: number, sigs: { customer: Uint8Array;
     const boxW = (CW - 20) / 2, boxH = 70, top = y;
     for (const [i, [label, png, name]] of ([['Customer', sigs.customer, names.customer], ['Talent representative', sigs.rep, names.rep]] as const).entries()) {
       const x = M + i * (boxW + 20);
-      const img = await pdf.embedPng(png); const scale = Math.min(boxW / img.width, boxH / img.height);
-      page.drawImage(img, { x, y: top - boxH, width: img.width * scale, height: img.height * scale });
+      if (png) {
+        const img = await pdf.embedPng(png); const scale = Math.min(boxW / img.width, boxH / img.height);
+        page.drawImage(img, { x, y: top - boxH, width: img.width * scale, height: img.height * scale });
+      } else page.drawText('Prepared and sent for e-signature', { x, y: top - boxH + 8, size: 9, font: reg, color: muted });
       page.drawLine({ start: { x, y: top - boxH - 4 }, end: { x: x + boxW, y: top - boxH - 4 }, thickness: 0.75, color: muted });
       page.drawText(clean(`${label}: ${name}`), { x, y: top - boxH - 16, size: 9, font: bold, color: ink });
-      page.drawText(clean(`Signed ${when}`), { x, y: top - boxH - 28, size: 8.5, font: reg, color: muted });
+      if (png || i === 0) page.drawText(clean(`Signed ${when}${!sigs.rep ? ' (online)' : ''}`), { x, y: top - boxH - 28, size: 8.5, font: reg, color: muted });
     }
     y = top - boxH - 40;
   }
@@ -326,7 +335,7 @@ async function frSoldTasks(db: Db, proposalId: string, frCustomerId: string, tex
 
 /** Uploads the PDF to the customer's FieldRoutes record; on a signed job also creates the scheduling task(s).
  *  Never fails the save: problems are returned as a note and logged. */
-async function writeBack(db: Db, id: string, number: number, frCustomerId: string | null, pdf: Uint8Array, signed: boolean, p: Payload, repName: string) {
+async function writeBack(db: Db, id: string, number: number, frCustomerId: string | null, pdf: Uint8Array, signed: boolean, p: SoldInfo, repName: string) {
   if (!frCustomerId) return { note: 'Customer is not in FieldRoutes yet, so nothing was sent there. Pick the customer from the FieldRoutes search to link them.' };
   if (!frBase()) return { note: 'FieldRoutes is not connected.' };
   const out: { document_id?: string; task_ids?: string[]; note?: string } = {};
@@ -356,6 +365,169 @@ async function writeBack(db: Db, id: string, number: number, frCustomerId: strin
   return out;
 }
 
+
+// ---------- after a proposal is signed (in person or online) ----------
+const store = (db: Db) => (path: string, body: Uint8Array, contentType: string) =>
+  db.storage.from('proposals').upload(path, body, { contentType, upsert: true }).then(r => { if (r.error) throw r.error; });
+
+type Signed = { id: string; number: number; pdf: Uint8Array; frCustomerId: string | null; email: string | null; firstName: string;
+  names: { customer: string; rep: string }; p: SoldInfo; lines: Record<string, unknown>[] };
+/** Customer copy, materials list and FieldRoutes. Never throws for email/BOM/FR problems: they come back as notes. */
+async function finishSigned(db: Db, s: Signed) {
+  const { id, number, pdf, p, names } = s;
+  const dir = `${number}`, up = store(db), c = { email: s.email, first_name: s.firstName }, cust = { fr_customer_id: s.frCustomerId };
+    // Customer copy
+    let emailed = false, note: string | undefined;
+    if (c.email) {
+      const cardPortal = p.payment_method === 'card' ? await portalUrl(db).catch(() => null) : false;
+      const e = await emailCustomer(c.email, c.first_name ?? '', p.doc.brand, p.doc.company.phone, number, pdf, cardPortal);
+      emailed = e.ok; note = e.note;
+      if ('response' in e) await db.from('fr_sync_log').insert({ proposal_id: id, action: 'email_customer', response: { body: e.response }, ok: e.ok });
+      if (emailed) await db.from('proposals').update({ customer_emailed_at: new Date().toISOString() }).eq('id', id);
+    } else note = 'No customer email on file, so no copy was emailed.';
+
+    // Materials list for the office. Never fails the save.
+    let bomNote: string | undefined;
+    try {
+      const bom = await makeBom(db, s.lines);
+      const bomPdf = await renderBomPdf(bom, p.doc, number, names.rep);
+      await up(`${dir}/bom.pdf`, bomPdf, 'application/pdf');
+      await db.from('proposals').update({ bom, bom_pdf_path: `${dir}/bom.pdf` }).eq('id', id).throwOnError();
+      const e = await sendEmail({
+        to: bomRecipients(), fromName: 'Talent Proposals', subject: `Materials list - SOLD proposal #${number} (${names.customer})`,
+        html: `<p>Proposal #${number} for ${esc(names.customer)} was signed. Sold by ${esc(names.rep)}.</p>` +
+          `<p>The materials list is attached${bom.has_draft ? ' (some quantities are DRAFT, check before ordering)' : ''}. The signed proposal is attached too.</p>`,
+        attachments: [{ filename: `materials-${number}.pdf`, content: b64(bomPdf) }, { filename: `proposal-${number}-signed.pdf`, content: b64(pdf) }],
+      });
+      if ('response' in e) await db.from('fr_sync_log').insert({ proposal_id: id, action: 'email_bom', response: { body: e.response }, ok: e.ok });
+      bomNote = e.ok ? undefined : `Materials list saved but not emailed: ${e.note}`;
+      if (cust.fr_customer_id && frBase()) {
+        try { await frUploadPdf(db, id, cust.fr_customer_id, bomPdf, `materials-${number}.pdf`, `Materials list #${number}`, false); }
+        catch (err) { bomNote = [bomNote, `Materials list not uploaded to FieldRoutes: ${(err as Error).message}`].filter(Boolean).join(' '); }
+      }
+    } catch (err) { bomNote = `Materials list failed: ${(err as Error).message}`; console.error('bom', bomNote); }
+
+    const fr = await writeBack(db, id, number, cust.fr_customer_id, pdf, true, p, names.rep);
+    return { emailed, email_note: note, bom_note: bomNote, fr };
+}
+
+// ---------- email to sign ----------
+const appUrl = () => (Deno.env.get('APP_URL') || 'https://talenttermite.netlify.app').replace(/\/+$/, '');
+const tokenHash = (t: string) => sha256(new TextEncoder().encode(t));
+const SIGN_DAYS = 30;
+
+async function emailToSign(db: Db, id: string, number: number, to: string | null, firstName: string, doc: Doc, pdf: Uint8Array, repName: string) {
+  if (!to) return { emailed: false, note: 'No customer email on file, so the proposal was not emailed.' };
+  const raw = crypto.getRandomValues(new Uint8Array(32));
+  const token = b64(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const expires = new Date(Date.now() + SIGN_DAYS * 86400000);
+  await db.from('proposals').update({ sign_token_hash: await tokenHash(token), sign_expires_at: expires.toISOString(), sign_email_to: to }).eq('id', id).throwOnError();
+  const link = `${appUrl()}/?sign=${token}`;
+  const e = await sendEmail({
+    to: [to], fromName: doc.brand, subject: `Your ${doc.brand} proposal (#${number})`,
+    html: `<p>Hi ${esc(firstName || 'there')},</p><p>Thank you for meeting with ${esc(repName)}. Your proposal is attached so you can look it over.</p>` +
+      `<p>When you are ready, you can review and sign it online:</p>` +
+      `<p><a href="${esc(link)}" style="display:inline-block;padding:12px 18px;background:#3d7a1f;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Review and sign</a></p>` +
+      `<p>This link is just for you and works until ${expires.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'long', day: 'numeric', year: 'numeric' })}. ` +
+      `Questions? Call us at ${esc(doc.company.phone)}.</p><p>${esc(doc.brand)}</p>`,
+    attachments: [{ filename: `${doc.brand.replace(/\s+/g, '-')}-proposal-${number}.pdf`, content: b64(pdf) }],
+  });
+  if ('response' in e) await db.from('fr_sync_log').insert({ proposal_id: id, action: 'email_sign_link', response: { body: e.response }, ok: e.ok });
+  if (e.ok) await db.from('proposals').update({ sign_emailed_at: new Date().toISOString() }).eq('id', id);
+  return { emailed: e.ok, note: e.ok ? undefined : (e.note === 'Email is not set up yet.' ? 'Email is not set up yet, so the proposal was saved but not emailed.' : `${e.note} The proposal was saved but not emailed.`) };
+}
+
+const METHOD_TEXT: Record<Exclude<Payload['payment_method'], ''>, string> = {
+  check_cash: 'Check or cash', card: 'Card (FieldRoutes Payments)',
+  finance_sac: 'Regions Bank: 9 months same as cash (loan code D4377)', finance_5yr: 'Regions Bank: 9.99% APR 5-year loan (loan code DEL2674)',
+};
+const FIN_NOTE = 'No penalty for early payoff. Subject to credit approval.';
+/** The customer's payment choice replaces the line under "Payment" in the saved proposal. */
+function withPayment(doc: Doc, method: Exclude<Payload['payment_method'], ''>): Doc {
+  const blocks = [...doc.blocks];
+  const h = blocks.findIndex(b => b.kind === 'h' && b.text === 'Payment');
+  if (h >= 0 && blocks[h + 1]?.kind === 'p') {
+    blocks[h + 1] = { kind: 'p', text: METHOD_TEXT[method] };
+    if (blocks[h + 2]?.kind === 'small' && blocks[h + 2].text === FIN_NOTE) blocks.splice(h + 2, 1);
+    if (method.startsWith('finance')) blocks.splice(h + 2, 0, { kind: 'small', text: FIN_NOTE });
+  }
+  return { ...doc, blocks };
+}
+const methodOf = (pm: string | null, plan: string | null): Payload['payment_method'] =>
+  pm === 'financing' ? (plan === 'regions_5yr' ? 'finance_5yr' : 'finance_sac') : (pm === 'check_cash' || pm === 'card' ? pm : '');
+
+type PublicReq = { action: 'view' | 'sign'; token?: string; updated_at?: string; name?: string; signature?: string; method?: string; agree?: boolean };
+async function customerLink(db: Db, req: Request, b: PublicReq) {
+  if (!/^[A-Za-z0-9_-]{40,60}$/.test(b.token ?? '')) return json({ error: 'This link is not valid.' }, 404);
+  type LinkRow = { id: string; number: number; status: string; doc: Doc; total: number; down_payment_amount: number | null; payment_method: string | null;
+    financing_plan: string | null; updated_at: string; sign_expires_at: string | null; first_viewed_at: string | null; rep_id: string; customer: unknown; rep: unknown };
+  const { data: r } = await db.from('proposals')
+    .select('id, number, status, doc, total, down_payment_amount, payment_method, financing_plan, updated_at, sign_expires_at, first_viewed_at, rep_id, customer:customers(first_name, last_name, email, fr_customer_id), rep:profiles!proposals_rep_id_fkey(full_name)')
+    .eq('sign_token_hash', await tokenHash(b.token!)).maybeSingle() as unknown as { data: LinkRow | null };
+  if (!r) return json({ error: 'This link is not valid anymore. A newer one may have been sent, or call us.' }, 404);
+  const doc = r.doc as Doc, phone = doc?.company?.phone ?? '';
+  if (r.status === 'signed') return json({ signed: true, number: r.number, brand: doc.brand, phone });
+  if (!['sent', 'viewed'].includes(r.status) || !r.sign_expires_at || new Date(r.sign_expires_at) < new Date())
+    return json({ error: `This link has expired. Call us at ${phone} and we will send a new one.` }, 410);
+  const cust = r.customer as unknown as { first_name: string | null; last_name: string | null; email: string | null; fr_customer_id: string | null };
+  const repName = (r.rep as unknown as { full_name: string } | null)?.full_name ?? 'Talent';
+
+  if (b.action === 'view') {
+    if (r.status === 'sent' || !r.first_viewed_at)
+      await db.from('proposals').update({ status: 'viewed', first_viewed_at: r.first_viewed_at ?? new Date().toISOString() }).eq('id', r.id);
+    return json({ signed: false, number: r.number, doc, updated_at: r.updated_at, payment_method: methodOf(r.payment_method, r.financing_plan),
+      customer_name: `${cust.first_name ?? ''} ${cust.last_name ?? ''}`.trim(), rep_name: repName, portal_url: await portalUrl(db) });
+  }
+
+  // sign
+  const method = b.method as Exclude<Payload['payment_method'], ''>;
+  if (!(method in METHOD_TEXT)) return json({ error: 'Choose how you would like to pay.' }, 400);
+  if (!b.agree) return json({ error: 'Please agree to sign electronically.' }, 400);
+  const name = (b.name ?? '').trim().replace(/\s+/g, ' ');
+  if (name.length < 3 || name.length > 80) return json({ error: 'Type your full name.' }, 400);
+  if ((b.signature ?? '').length > 600_000) return json({ error: 'The signature is too large. Clear it and sign again.' }, 400);
+  if (b.updated_at !== r.updated_at) return json({ error: 'This proposal was just updated. Reload the page to see the latest version, then sign.', reload: true }, 409);
+  let sig: Uint8Array;
+  try { sig = pngBytes(b.signature ?? ''); } catch { return json({ error: 'Please sign in the box.' }, 400); }
+
+  // Claim it first so two taps (or the rep signing at the same time) can never make two signed copies.
+  const signedAt = new Date().toISOString();
+  const fin = method === 'finance_sac' ? 'regions_9mo_sac' : method === 'finance_5yr' ? 'regions_5yr' : null;
+  const { data: claimed } = await db.from('proposals').update({ status: 'signed', signed_at: signedAt, sign_token_hash: null, signed_via: 'email_link' })
+    .eq('id', r.id).in('status', ['sent', 'viewed']).eq('updated_at', r.updated_at).select('id');
+  if (!claimed?.length) return json({ error: 'This proposal was just updated or signed. Reload the page.', reload: true }, 409);
+  try {
+    const signedDoc = withPayment(doc, method);
+    const names = { customer: name, rep: repName };
+    const pdf = await renderPdf(signedDoc, r.number, { customer: sig, rep: null }, names, signedAt);
+    const hash = await sha256(pdf), dir = `${r.number}`, up = store(db);
+    await up(`${dir}/signed.pdf`, pdf, 'application/pdf');
+    await up(`${dir}/sig-customer.png`, sig, 'image/png');
+    const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || null;
+    await db.from('signatures').insert({ proposal_id: r.id, signer_role: 'customer', signer_name: name, signature_image_path: `${dir}/sig-customer.png`,
+      signed_at: signedAt, ip_address: ip, user_agent: req.headers.get('user-agent'), document_sha256: hash, signed_pdf_path: `${dir}/signed.pdf` }).throwOnError();
+    await db.from('proposals').update({ signed_pdf_path: `${dir}/signed.pdf`, signed_pdf_sha256: hash, doc: signedDoc,
+      payment_method: fin ? 'financing' : method, financing_plan: fin, updated_at: signedAt }).eq('id', r.id).throwOnError();
+    const { data: lines } = await db.from('proposal_lines').select('price_item_id, name, qty').eq('proposal_id', r.id) as unknown as { data: Record<string, unknown>[] | null };
+    const p: SoldInfo = { payment_method: method, doc: signedDoc, quote: { total: Number(r.total), down_amount: Number(r.down_payment_amount ?? 0) } };
+    const done = await finishSigned(db, { id: r.id, number: r.number, pdf, frCustomerId: cust.fr_customer_id, email: cust.email, firstName: cust.first_name ?? '', names, p, lines: lines ?? [] });
+    // Tell the rep and the office it was signed online.
+    try {
+      const { data: u } = await db.auth.admin.getUserById(r.rep_id);
+      const to = [...new Set([u?.user?.email, Deno.env.get('MAIL_FROM')].filter((x): x is string => !!x))];
+      if (to.length) await sendEmail({ to, fromName: 'Talent Proposals', subject: `SIGNED online - proposal #${r.number} (${names.customer})`,
+        html: `<p>${esc(names.customer)} signed proposal #${r.number} online. Payment: ${esc(METHOD_TEXT[method])}.</p><p>The signed PDF is attached and is in FieldRoutes.</p>`,
+        attachments: [{ filename: `proposal-${r.number}-signed.pdf`, content: b64(pdf) }] });
+    } catch (e) { console.error('notify rep', (e as Error).message); }
+    return json({ signed: true, number: r.number, emailed: done.emailed, card: method === 'card', portal_url: method === 'card' ? await portalUrl(db) : null, brand: doc.brand, phone });
+  } catch (e) {
+    // Put it back so the customer can try again.
+    await db.from('proposals').update({ status: 'viewed', signed_at: null, sign_token_hash: await tokenHash(b.token!), signed_via: null }).eq('id', r.id);
+    console.error('customer sign', (e as Error).message);
+    return json({ error: 'Something went wrong saving your signature. Please try again, or call us.' }, 500);
+  }
+}
+
 // ---------- handler ----------
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -363,14 +535,17 @@ Deno.serve(async req => {
   const url = Deno.env.get('SUPABASE_URL')!, service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const db = createClient(url, service, { auth: { persistSession: false } });
 
+  let p: Payload;
+  try { p = await req.json(); } catch { return json({ error: 'Bad request' }, 400); }
+  const pub = p as unknown as PublicReq;
+  if (pub.action === 'view' || pub.action === 'sign') return customerLink(db, req, pub);
+
   const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
   const { data: u } = await db.auth.getUser(jwt);
   if (!u?.user) return json({ error: 'Sign in again to send this proposal.' }, 401);
   const { data: rep } = await db.from('profiles').select('id, full_name, active').eq('id', u.user.id).maybeSingle();
   if (!rep?.active) return json({ error: 'Your login is not set up as a Talent user yet. Ask Nathan or John.' }, 403);
 
-  let p: Payload;
-  try { p = await req.json(); } catch { return json({ error: 'Bad request' }, 400); }
   if (!/^[0-9a-f-]{36}$/i.test(p.client_ref ?? '')) return json({ error: 'Missing client_ref' }, 400);
   if (!p.lines?.length) return json({ error: 'The proposal has no work on it.' }, 400);
   if (p.quote.discount_pct > 10) return json({ error: 'Discount is over 10%.' }, 400);
@@ -408,6 +583,7 @@ Deno.serve(async req => {
       down_payment_amount: p.quote.down_amount, down_payment_pct: p.quote.down_pct,
       price_book_version: p.price_book.loaded_at, price_book_source: p.price_book.source,
       top_down_ack: p.top_down_ack, doc: p.doc, app_draft: p.app_draft ?? null, signed_at: signing ? p.signed_at : null, updated_at: now,
+      ...(signing ? { sign_token_hash: null, signed_via: 'in_person' } : {}),
     };
     let id: string, number: number;
     if (existing) {
@@ -430,14 +606,14 @@ Deno.serve(async req => {
     const pdf = await renderPdf(p.doc, number, sigs, names, signing ? p.signed_at : null);
     const hash = await sha256(pdf);
     const dir = `${number}`;
-    const up = (path: string, body: Uint8Array, contentType: string) =>
-      db.storage.from('proposals').upload(path, body, { contentType, upsert: true }).then(r => { if (r.error) throw r.error; });
+    const up = store(db);
 
     if (!sigs) {
       await up(`${dir}/unsigned.pdf`, pdf, 'application/pdf');
       await db.from('proposals').update({ unsigned_pdf_path: `${dir}/unsigned.pdf` }).eq('id', id).throwOnError();
       const fr = await writeBack(db, id, number, cust.fr_customer_id, pdf, false, p, names.rep);
-      return json({ proposal_id: id, number, status: 'sent', emailed: false, fr });
+      const sign = p.email_to_sign ? await emailToSign(db, id, number, c.email, c.first_name ?? '', p.doc, pdf, names.rep) : undefined;
+      return json({ proposal_id: id, number, status: 'sent', emailed: false, fr, sign_emailed: sign?.emailed ?? false, sign_note: sign?.note });
     }
 
     await up(`${dir}/signed.pdf`, pdf, 'application/pdf');
@@ -452,39 +628,8 @@ Deno.serve(async req => {
     ]).throwOnError();
     await db.from('proposals').update({ signed_pdf_path: `${dir}/signed.pdf`, signed_pdf_sha256: hash }).eq('id', id).throwOnError();
 
-    // Customer copy
-    let emailed = false, note: string | undefined;
-    if (c.email) {
-      const cardPortal = p.payment_method === 'card' ? await portalUrl(db).catch(() => null) : false;
-      const e = await emailCustomer(c.email, c.first_name ?? '', p.doc.brand, p.doc.company.phone, number, pdf, cardPortal);
-      emailed = e.ok; note = e.note;
-      if ('response' in e) await db.from('fr_sync_log').insert({ proposal_id: id, action: 'email_customer', response: { body: e.response }, ok: e.ok });
-      if (emailed) await db.from('proposals').update({ customer_emailed_at: new Date().toISOString() }).eq('id', id);
-    } else note = 'No customer email on file, so no copy was emailed.';
-
-    // Materials list for the office. Never fails the save.
-    let bomNote: string | undefined;
-    try {
-      const bom = await makeBom(db, p.lines);
-      const bomPdf = await renderBomPdf(bom, p.doc, number, names.rep);
-      await up(`${dir}/bom.pdf`, bomPdf, 'application/pdf');
-      await db.from('proposals').update({ bom, bom_pdf_path: `${dir}/bom.pdf` }).eq('id', id).throwOnError();
-      const e = await sendEmail({
-        to: bomRecipients(), fromName: 'Talent Proposals', subject: `Materials list - SOLD proposal #${number} (${names.customer})`,
-        html: `<p>Proposal #${number} for ${esc(names.customer)} was signed. Sold by ${esc(names.rep)}.</p>` +
-          `<p>The materials list is attached${bom.has_draft ? ' (some quantities are DRAFT, check before ordering)' : ''}. The signed proposal is attached too.</p>`,
-        attachments: [{ filename: `materials-${number}.pdf`, content: b64(bomPdf) }, { filename: `proposal-${number}-signed.pdf`, content: b64(pdf) }],
-      });
-      if ('response' in e) await db.from('fr_sync_log').insert({ proposal_id: id, action: 'email_bom', response: { body: e.response }, ok: e.ok });
-      bomNote = e.ok ? undefined : `Materials list saved but not emailed: ${e.note}`;
-      if (cust.fr_customer_id && frBase()) {
-        try { await frUploadPdf(db, id, cust.fr_customer_id, bomPdf, `materials-${number}.pdf`, `Materials list #${number}`, false); }
-        catch (err) { bomNote = [bomNote, `Materials list not uploaded to FieldRoutes: ${(err as Error).message}`].filter(Boolean).join(' '); }
-      }
-    } catch (err) { bomNote = `Materials list failed: ${(err as Error).message}`; console.error('bom', bomNote); }
-
-    const fr = await writeBack(db, id, number, cust.fr_customer_id, pdf, true, p, names.rep);
-    return json({ proposal_id: id, number, status: 'signed', emailed, email_note: note, bom_note: bomNote, fr });
+    const done = await finishSigned(db, { id, number, pdf, frCustomerId: cust.fr_customer_id, email: c.email, firstName: c.first_name ?? '', names, p, lines: p.lines });
+    return json({ proposal_id: id, number, status: 'signed', ...done });
   } catch (e) {
     const msg = (e as { message?: string }).message ?? String(e);
     console.error('submit-proposal', msg);

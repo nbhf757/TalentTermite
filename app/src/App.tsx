@@ -101,15 +101,16 @@ export default function App() {
     } finally { sending.current = false; }
   }, [signoff, brand, customer, book, sum, work, suggestions, comments, sections, answers]);
 
-  const saveUnsigned = useCallback(async () => {
+  const saveUnsigned = useCallback(async (emailToSign = false) => {
     const so = { ...signoff, clientRef: signoff.clientRef ?? crypto.randomUUID() };
-    setSignoff({ ...so, unsigned: { status: 'sending' } });
+    setSignoff({ ...so, unsigned: { status: 'sending', email: emailToSign } });
     try {
-      const r = await submitProposal(buildSubmission({
+      const r = await submitProposal({ ...buildSubmission({
         brand, customer, book, totals: sum, work, suggestions, comments, method: so.method,
         clientRef: so.clientRef, sections, answers, customerSig: null, repSig: null, signedAt: null,
-      }));
-      setSignoff({ ...so, unsigned: { status: 'saved', number: r.number, at: new Date().toISOString(), frNote: r.fr?.note, frDoc: !!r.fr?.document_id } });
+      }), email_to_sign: emailToSign });
+      setSignoff({ ...so, unsigned: { status: 'saved', number: r.number, at: new Date().toISOString(), frNote: r.fr?.note, frDoc: !!r.fr?.document_id,
+        emailedTo: r.sign_emailed ? customer.email : undefined, emailNote: emailToSign ? r.sign_note : undefined } });
     } catch (e) {
       setSignoff({ ...so, unsigned: { status: 'error', note: (e as Error).message } });
     }
